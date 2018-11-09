@@ -1,30 +1,28 @@
 help:
 	@cat Makefile
 
-DATA?="${HOME}/Data"
+DATA?="data"
 GPU?=0
-DOCKER_FILE=Dockerfile
+DOCKER_FILE=docker/Dockerfile
 DOCKER=GPU=$(GPU) nvidia-docker
 BACKEND=tensorflow
 PYTHON_VERSION?=3.6
 CUDA_VERSION?=9.0
 CUDNN_VERSION?=7
 TEST=tests/
-SRC?=$(shell dirname `pwd`)
-PORT_FORWARD?=6006
+SRC=$(shell pwd)
 
 build:
 	docker build -t keras --build-arg python_version=$(PYTHON_VERSION) --build-arg cuda_version=$(CUDA_VERSION) --build-arg cudnn_version=$(CUDNN_VERSION) -f $(DOCKER_FILE) .
 
 bash: build
-	$(DOCKER) run -p 0.0.0.0:$(PORT_FORWARD):$(PORT_FORWARD) -it -v $(SRC):/src/workspace -v $(DATA):/data --env KERAS_BACKEND=$(BACKEND) keras bash
+	$(DOCKER) run -p $(PORT) -it -v $(SRC):/src/workspace -v $(DATA):/data --env KERAS_BACKEND=$(BACKEND) keras bash
 
 ipython: build
-	$(DOCKER) run -p 0.0.0.0:$(PORT_FORWARD):$(PORT_FORWARD) -it -v $(SRC):/src/workspace -v $(DATA):/data --env KERAS_BACKEND=$(BACKEND) keras ipython
+	$(DOCKER) run -p $(PORT) -it -v $(SRC):/src/workspace -v $(DATA):/data --env KERAS_BACKEND=$(BACKEND) keras ipython
 
 notebook: build
-	$(DOCKER) run -p 0.0.0.0:$(PORT_FORWARD):$(PORT_FORWARD) -it -v $(SRC):/src/workspace -v $(DATA):/data --net=host --env KERAS_BACKEND=$(BACKEND) keras
+	$(DOCKER) run -p $(PORT) -it -v $(SRC):/src/workspace -v $(DATA):/data --net=host --env KERAS_BACKEND=$(BACKEND) keras
 
 test: build
-	$(DOCKER) run -p 0.0.0.0:$(PORT_FORWARD):$(PORT_FORWARD) -it -v $(SRC):/src/workspace -v $(DATA):/data --env KERAS_BACKEND=$(BACKEND) keras py.test $(TEST)
-
+	$(DOCKER) run -p $(PORT) -it -v $(SRC):/src/workspace -v $(DATA):/data --env KERAS_BACKEND=$(BACKEND) keras py.test $(TEST)

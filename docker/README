@@ -14,7 +14,11 @@ quick links here:
 
 ## Running the container
 
-We are using `Makefile` to simplify docker commands within make commands.
+We are using `Makefile` to simplify docker commands within make commands. This Makefile is in the project root.
+
+Build the container and start serving TensorBoard
+
+    $ make tensorboard
 
 Build the container and start a Jupyter Notebook
 
@@ -33,11 +37,6 @@ For GPU support install NVIDIA drivers (ideally latest) and
 
     $ make notebook GPU=0 # or [ipython, bash]
 
-Switch between Theano and TensorFlow
-
-    $ make notebook BACKEND=theano
-    $ make notebook BACKEND=tensorflow
-
 Mount a volume for external data sets
 
     $ make DATA=~/mydata
@@ -45,8 +44,6 @@ Mount a volume for external data sets
 Prints all make tasks
 
     $ make help
-
-You can change Theano parameters by editing `/docker/theanorc`.
 
 
 Note: If you would have a problem running nvidia-docker you may try the old way
