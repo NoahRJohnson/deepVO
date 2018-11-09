@@ -1,0 +1,1 @@
+Use the download script to load the KITTI data to this folder. The docker container has the project root mounted, so this data will be accessible from the container. None of this data will be stored in version control thanks to a .gitignore file.

@@ -10,10 +10,10 @@ Download and preprocess KITTI data
 python3 download_kitti_data.py
 ```
 
-spin up container
+spin up container, which automatically mounts this repository
 
 ```bash
-sudo make DATA=data/ bash
+sudo make bash
 ```
 
 train model
@@ -25,7 +25,7 @@ python3 train_model.py
 visualize training with tensorboard. In a separate terminal, from project root, run:
 
 ```bash
-tensorboard --logdir=logs/
+./start_tensorboard.sh
 ```
 
 validate and test model
