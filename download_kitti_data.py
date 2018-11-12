@@ -50,6 +50,14 @@ def get_date_drive_pairs(datadir):
 
 
 def ground_truth(datadir):
+    """Create y vectors arrays.
+
+    Return list of arrays with shape
+    [frames, 6], whose rows are the ground truth
+    [lat, lng, alt, roll, pitch, yaw] values
+    for the corresponding frame in the corresponding
+    squence.
+    """
     ground_truth = []
     date_drive_pairs = get_date_drive_pairs(datadir)
     datapath = os.path.join('./', datadir)
@@ -62,4 +70,19 @@ def ground_truth(datadir):
     return ground_truth
 
 
-        
+def get_frame_sequences(datadir):
+    """Create x vectors."""
+
+    x = []
+    date_drive_pairs = get_date_drive_pairs(datadir)
+    datapath = os.path.join('./', datadir)
+    for date, drive in date_drive_pairs:
+        current_drive = []
+        data = pykitti.raw(datapath, date, drive)
+        rgbs = [cam1 for cam1, _ in data.rgb]
+        for first_frame, second_frame in zip(rgbs, rgbs[1:]):
+            current_drive.append(
+                np.dstack([np.array(first_frame),
+                          np.array(second_frame)]))
+        x.append(current_drive)
+    return x
