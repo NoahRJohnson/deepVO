@@ -13,7 +13,7 @@ python3 download_kitti_data.py
 
 If the download doesn't work anymore, go to the [source](http://www.cvlibs.net/datasets/kitti/eval_odometry.php). Manually download the color, calibration, and ground truth files. You will have to enter an email address, and will get a download link. Download the zipped file, and extract its contents. You should now have a 'dataset' folder, with 'poses' and 'sequences' folders within.
 
-Now to avoid setting up CUDA yourself, spin up a docker container for Keras. Use the Makefile, which automatically mounts this repository and mounts your kitti data in the 'data' folder. Just modify the Makefile DATA variable to point to wherever your 'dataset' folder is.
+Now to avoid setting up CUDA yourself, spin up a docker container for Keras. Use the Makefile, which automatically mounts this repository and mounts your kitti data into the 'data' folder. Just modify the Makefile DATA variable to point to wherever your 'dataset' folder is.
 
 ```bash
 sudo make bash

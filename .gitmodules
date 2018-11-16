@@ -1,3 +1,0 @@
-[submodule "pykitti"]
-	path = pykitti
-	url = git@github.com:NoahRJohnson/pykitti.git
