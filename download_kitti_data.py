@@ -1,132 +1,48 @@
-"""Example of pykitti.odometry usage."""
-import itertools
-import matplotlib.pyplot as plt
-import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
+#!/usr/bin/env python3
+""""Downloads and unzips KITTI odometry benchmark video for odometry.
+Warning: This can take a while, and uses up ~ 65Gb of disk space."""
 
-import pykitti
+import argparse
 import os
-import numpy as np
-from PIL import Image
+import sys
 
-__author__ = "Lee Clement"
-__email__ = "lee.clement@robotics.utias.utoronto.ca"
+from subprocess import call
 
-# Change this to the directory where you store KITTI data
-basedir = 'data'
+URL_BASE="https://s3.eu-central-1.amazonaws.com/avg-kitti/"
+zip_tags = ['data_odometry_color', 'data_odometry_poses']
 
-# Specify the dataset to load
-sequence = '04'
+def main():
 
-# Load the data. Optionally, specify the frame range to load.
-# dataset = pykitti.odometry(basedir, sequence)
-dataset = pykitti.odometry(basedir, sequence, frames=range(0, 20, 5))
+    # Read in where to place this data we're downloading
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--outdir', type=str, default='data', help='folder to place data')
+    args = parser.parse_args()
+    out_dir = args.outdir
 
-# dataset.calib:      Calibration data are accessible as a named tuple
-# dataset.timestamps: Timestamps are parsed into a list of timedelta objects
-# dataset.poses:      List of ground truth poses T_w_cam0
-# dataset.camN:       Generator to load individual images from camera N
-# dataset.gray:       Generator to load monochrome stereo pairs (cam0, cam1)
-# dataset.rgb:        Generator to load RGB stereo pairs (cam2, cam3)
-# dataset.velo:       Generator to load velodyne scans as [x,y,z,reflectance]
+    # Make the output directory if it doesn't already exist
+    os.makedirs(out_dir, exist_ok=True)
+    # Move inside that directory
+    os.chdir(out_dir)
 
-# Grab some data
-second_pose = dataset.poses[1]
-first_gray = next(iter(dataset.gray))
-first_cam1 = next(iter(dataset.cam1))
-first_rgb = dataset.get_rgb(0)
-first_cam2 = dataset.get_cam2(0)
-third_velo = dataset.get_velo(2)
+    # Append .zip to every file name
+    zip_names = [name + ".zip" for name in zip_tags]
 
-# Display some of the data
-np.set_printoptions(precision=4, suppress=True)
-print('\nSequence: ' + str(dataset.sequence))
-print('\nFrame range: ' + str(dataset.frames))
+    for zip_name in zip_names:
 
-print('\nGray stereo pair baseline [m]: ' + str(dataset.calib.b_gray))
-print('\nRGB stereo pair baseline [m]: ' + str(dataset.calib.b_rgb))
+        if os.path.exists(zip_name):
+            print("File {} exists. Not re-downloading.".format(zip_name))
+            continue
 
-print('\nFirst timestamp: ' + str(dataset.timestamps[0]))
-print('\nSecond ground truth pose:\n' + str(second_pose))
+        # else download zip
+        url = URL_BASE + zip_name
+        print("Downloading file {} to folder {}.".format(zip_name, out_dir))
+        call(['wget', url])
 
-f, ax = plt.subplots(2, 2, figsize=(15, 5))
-ax[0, 0].imshow(first_gray[0], cmap='gray')
-ax[0, 0].set_title('Left Gray Image (cam0)')
+        # and unzip it
+        print("Unzipping file {} in folder {}.".format(zip_name, out_dir))
+        call(['unzip', zip_name])
 
-ax[0, 1].imshow(first_cam1, cmap='gray')
-ax[0, 1].set_title('Right Gray Image (cam1)')
+    return 0
 
-ax[1, 0].imshow(first_cam2)
-ax[1, 0].set_title('Left RGB Image (cam2)')
-
-ax[1, 1].imshow(first_rgb[1])
-ax[1, 1].set_title('Right RGB Image (cam3)')
-
-f2 = plt.figure()
-ax2 = f2.add_subplot(111, projection='3d')
-# Plot every 100th point so things don't get too bogged down
-velo_range = range(0, third_velo.shape[0], 100)
-ax2.scatter(third_velo[velo_range, 0],
-            third_velo[velo_range, 1],
-            third_velo[velo_range, 2],
-            c=third_velo[velo_range, 3],
-            cmap='gray')
-ax2.set_title('Third Velodyne scan (subsampled)')
-
-plt.show()
-
-
-def dir_filter(_dir):
-    splt = _dir[0].split("/")
-    return len(splt) > 2 and splt[1].startswith("201")
-
-
-def get_date_drive_pairs(datadir):
-    sequence_dirs = filter(dir_filter, os.walk(datadir))
-    date_drive_pairs = set()
-    for thing in sequence_dirs:
-        path_parts = thing[0].split("/")
-        date = path_parts[1]
-        drive = path_parts[2].split("_")[-2]
-        date_drive_pairs.add((date, drive))
-    return date_drive_pairs
-
-
-def ground_truth(datadir):
-    """Create y vectors arrays.
-
-    Return list of arrays with shape
-    [frames, 6], whose rows are the ground truth
-    [lat, lng, alt, roll, pitch, yaw] values
-    for the corresponding frame in the corresponding
-    squence.
-    """
-    ground_truth = []
-    date_drive_pairs = get_date_drive_pairs(datadir)
-    datapath = os.path.join('./', datadir)
-    for date, drive in date_drive_pairs:
-        current_drive = []
-        data = pykitti.raw(datapath, date, drive)
-        for packet in data.oxts:
-            current_drive.append(list(packet.packet[:6]))
-        ground_truth.append(np.array(current_drive))
-    return ground_truth
-
-
-def get_frame_sequences(datadir):
-    """Create x vectors."""
-
-    x = []
-    date_drive_pairs = get_date_drive_pairs(datadir)
-    datapath = os.path.join('./', datadir)
-    for date, drive in date_drive_pairs:
-        current_drive = []
-        data = pykitti.raw(datapath, date, drive)
-        rgbs = [cam1 for cam1, _ in data.rgb]
-        for first_frame, second_frame in zip(rgbs, rgbs[1:]):
-            current_drive.append(
-                np.dstack([np.array(first_frame),
-                          np.array(second_frame)]))
-        x.append(current_drive)
-    return x
-
+if __name__ == '__main__':
+    sys.exit(main())
