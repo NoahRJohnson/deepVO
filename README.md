@@ -4,6 +4,8 @@ Implementation of a Recurrent CNN for monocular visual odometry from video.
 Following [S. Wang, R. Clark, H. Wen, and N. Trigoni](https://www.cs.ox.ac.uk/files/9026/DeepVO.pdf).
 
 ## Usage
+Download KITTI Calibration files from [here](http://www.cvlibs.net/datasets/kitti/eval_odometry.php). You will have to enter an email address, and get a download link. Download the zipped file, and extract its contents. Place the 'sequences' folder into the 'data' folder in 
+
 Download and preprocess KITTI data
 
 ```bash

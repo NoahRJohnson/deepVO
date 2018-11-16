@@ -1,9 +1,28 @@
+import argparse
 import keras as K
 import numpy as np
 
+from keras.callbacks import TensorBoard
+from time import time
+
+ap = argparse.ArgumentParser()
+
+ap.add_argument('--batch_size', type=int, default=50)
+ap.add_argument('--layer_num', type=int, default=2)
+ap.add_argument('--seq_length', type=int, default=50)
+ap.add_argument('--hidden_dim', type=int, default=500)
+ap.add_argument('--generate_length', type=int, default=500)
+ap.add_argument('--nb_epoch', type=int, default=20)
+ap.add_argument('--mode', default = 'train')
+ap.add_argument('--weights', default='')
+
+args = vars(ap.parse_args())
 
 def weighted_mse(y_true, y_pred):
-        '''Return L_x+bL_q.'''
+        '''
+        Custom loss function
+        Return L_x + b*L_q
+        '''
         wy_pred = K.dot()([y_pred, K.variable(np.array([1,1,1, b, b, b]])
         wy_true = K.dot()([y_true, K.variable(np.array([1,1,1, b, b, b]])
         return K.losses.mean_squared_error(wy_true, wy_pred)
@@ -73,3 +92,8 @@ model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3), """9"""
                              strides=(2, 2, 1))
 model.add(K.layers.LSTM(6, return_sequences=True))
 model.compile(loss=weighted_mse, optimizer='adam', metrics=['accuracy'])
+
+# Create TensorBoard
+tensorboard = TensorBoard(log_dir="logs/{}".format(time()))
+
+model.fit(

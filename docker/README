@@ -16,10 +16,6 @@ quick links here:
 
 We are using `Makefile` to simplify docker commands within make commands. This Makefile is in the project root.
 
-Build the container and start serving TensorBoard
-
-    $ make tensorboard
-
 Build the container and start a Jupyter Notebook
 
     $ make notebook
