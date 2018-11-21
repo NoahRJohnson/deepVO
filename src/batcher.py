@@ -97,9 +97,11 @@ def process_poses(dataset):
     return [mat_to_pose_vector(pose) for pose in rectified_poses]
 
 
-def get_stacked_rgbs(dataset):
+def get_stacked_rgbs(dataset, batch_frames):
     """Return list of dstacked rbg images."""
     rgbs = [np.array(left_cam) for left_cam, _ in dataset.rgb]
+    mean_rgb = sum(rgbs) / float(batch_frames)
+    rgbs = [rgb - mean_rgb for rgb in rgbs]
     return [np.dstack((frame1, frame2))
             for frame1, frame2 in zip(rgbs, rgbs[1:])]
 
@@ -119,7 +121,7 @@ def batcher(basedir, batch_frames, train_seqs):
                        sequence,
                        frames=range(first_frame, last_frame))
 
-    x = np.array([np.vstack(get_stacked_rgbs(dataset))])
+    x = np.array([np.vstack(get_stacked_rgbs(dataset, batch_frames))])
     y = process_poses(dataset)
 
     return {'x': x, 'y': y}
