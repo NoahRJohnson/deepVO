@@ -15,7 +15,7 @@ def main():
 
     # Read in where to place this data we're downloading
     parser = argparse.ArgumentParser()
-    parser.add_argument('--outdir', type=str, default='data', help='folder to place data')
+    parser.add_argument('outdir', type=str, help='folder to place data')
     args = parser.parse_args()
     out_dir = args.outdir
 
@@ -24,7 +24,7 @@ def main():
     # Move inside that directory
     os.chdir(out_dir)
 
-    # Append .zip to every file name
+    # Append .zip to every file name to download
     zip_names = [name + ".zip" for name in zip_tags]
 
     for zip_name in zip_names:
@@ -35,11 +35,11 @@ def main():
 
         # else download zip
         url = URL_BASE + zip_name
-        print("Downloading file {} to folder {}.".format(zip_name, out_dir))
+        print("Downloading file \"{}\" to folder \"{}\".".format(zip_name, out_dir))
         call(['wget', url])
 
         # and unzip it
-        print("Unzipping file {} in folder {}.".format(zip_name, out_dir))
+        print("Unzipping file \"{}\" in folder \"{}\".".format(zip_name, out_dir))
         call(['unzip', zip_name])
 
     return 0

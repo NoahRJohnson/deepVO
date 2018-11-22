@@ -2,8 +2,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from odometry import odometry
 from PIL import Image
+
+import sys
+testdir = os.path.dirname(__file__)
+srcdir = '..'
+sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
+from odometry import odometry
 
 __author__ = "Lee Clement"
 __email__ = "lee.clement@robotics.utias.utoronto.ca"
@@ -28,7 +33,9 @@ dataset = odometry(basedir, sequence, frames=range(0, 20, 5))
 # dataset.velo:       Generator to load velodyne scans as [x,y,z,reflectance]
 
 # Grab some data
+first_pose = dataset.poses[0]
 second_pose = dataset.poses[1]
+third_pose = dataset.poses[2]
 #first_gray = next(iter(dataset.gray))
 #first_cam1 = next(iter(dataset.cam1))
 first_rgb = dataset.get_rgb(0)
@@ -44,7 +51,11 @@ print('\nFrame range: ' + str(dataset.frames))
 #print('\nRGB stereo pair baseline [m]: ' + str(dataset.calib.b_rgb))
 
 print('\nFirst timestamp: ' + str(dataset.timestamps[0]))
+print('\nFirst ground truth pose:\n' + str(first_pose))
 print('\nSecond ground truth pose:\n' + str(second_pose))
+print('\nThird ground truth pose:\n' + str(third_pose))
+
+print('\nMultiplication of third pose by inverse of second pose:\n' + str(np.dot(np.linalg.inv(second_pose), third_pose)))
 
 f, ax = plt.subplots(1, 2, figsize=(15, 5))
 #ax[0, 0].imshow(first_gray[0], cmap='gray')

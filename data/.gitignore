@@ -4,3 +4,5 @@
 !.gitignore
 # and the readme
 !README
+# and the download script
+!download_kitti_data.py

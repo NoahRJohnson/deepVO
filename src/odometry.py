@@ -11,7 +11,7 @@ from collections import namedtuple
 
 import numpy as np
 
-import pykitti.utils as utils
+import utils
 
 __author__ = "Lee Clement"
 __email__ = "lee.clement@robotics.utias.utoronto.ca"
