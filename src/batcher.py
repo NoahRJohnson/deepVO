@@ -19,14 +19,22 @@ from os.path import isfile, join
 
 
 def get_seq_total_frames(seq, basedir):
-    """Get the total number of frames in a sequence.
+    """Get the total number of frames in a KITTI sequence, 0-indexed.
 
     It's inefficient to pull the whole dataset only to grab a few
     frames for a batch, so we'll count the number of total frames
     before we pick an initial frame, then only pull in the desired
     frames.
+
+    Args:
+        seq: The KITTI sequence number to examine.
+        basedir: The directory where KITTI data is stored.
+
+    Returns:
+        The 0-indexed count of how many image frames there are in
+        this KITTI sequence.
     """
-    path = basedir + "sequences/" + seq + "/image_2/"
+    path = basedir + "sequences/" + str(seq) + "/image_2/"
 
     # This actually returns the index of the last frame rather than
     # the number of frames, for convenience
@@ -46,7 +54,7 @@ def is_rotation_matrix(r):
 
 
 def rotation_matrix_to_euler_angles(r):
-    """Calculate rotation matrix to euler angles.
+    """Convert rotation matrix to euler angles.
 
     referred from https://www.learnopencv.com/rotation-matrix-to-euler-angles
     """
@@ -69,12 +77,17 @@ def rotation_matrix_to_euler_angles(r):
 def rectify_poses(poses):
     """Set ground truth relative to first pose in subsequence.
 
-    Poses are translation matrices relative to the first pose
-    in the full sequence. To get meaningful output from sub-
-    sequences, we need to alter then to be relative to the
+    Poses are rotation-translation matrices relative to the first
+    pose in the full sequence. To get meaningful output from sub-
+    sequences, we need to alter them to be relative to the
     first position in the sub-sequence.
 
-    Returns: np array of rectified translation matrices
+    Args:
+        poses:  An iterable of 4x4 rotation-translation matrices representing 
+                the vehicle's pose at each step in the sequence.
+
+    Returns:
+        An iterable of rectified rotation-translation matrices
     """
     first_frame = poses[0]
     rectified_poses = [np.dot(inv(first_frame), x) for x in poses[1:]]
@@ -82,9 +95,15 @@ def rectify_poses(poses):
 
 
 def mat_to_pose_vector(pose):
-    """Convert the 4x4 rotation-translation matrix.
+    """Convert the 4x4 rotation-translation matrix into a 6-dim vector.
 
-    Return (roll, pitch, yaw, lat, lng, alt) numpy array.
+    Args:
+        pose:  The 4x4 rotation-translation matrix representing the vehicle's pose.
+
+    Returns:
+        The pose represented as a vector.
+
+        I.e. a (roll, pitch, yaw, lat, lng, alt) numpy array.
     """
     return np.concatenate((rotation_matrix_to_euler_angles(pose[:3, :3]),
                           pose[:3, 3]))
@@ -107,7 +126,21 @@ def get_stacked_rgbs(dataset, batch_frames):
 
 
 def batcher(basedir, batch_frames, train_seqs):
-    """Return {'x': x, 'y': y}."""
+    """
+    Creates one batch.
+
+    Args:
+        basedir: The directory where KITTI data is stored.
+        batch_frames: The number of image pairs in the batch.
+        train_seqs: 
+
+    Returns:
+        A batch of the form
+
+        {'x': x, 'y': y}
+
+        for consumption by Keras, where x is data and y is labels.
+    """
     # Select a sequence at random.
     sequence = random.choice(train_seqs)
 
@@ -115,8 +148,7 @@ def batcher(basedir, batch_frames, train_seqs):
     first_frame = random.randint(0, max_frame - batch_frames + 1)
     last_frame = first_frame + batch_frames
 
-    # Load the data. Optionally, specify the frame range to load.
-    # dataset = pykitti.odometry(basedir, sequence)
+    # Load the data. Specify the frame range to load.
     dataset = odometry(basedir,
                        sequence,
                        frames=range(first_frame, last_frame))
@@ -128,7 +160,19 @@ def batcher(basedir, batch_frames, train_seqs):
 
 
 def test_batch(basedir, seq):
-    """Process images and ground truth for a test sequence."""
+    """Process images and ground truth for a test sequence.
+
+    Args:
+        basedir: The directory where KITTI data is stored.
+        seq: The KITTI sequence number to test.
+
+    Returns:
+        A batch of the form
+
+        {'x': x, 'y': y}
+
+        for consumption by Keras, where x is data and y is labels.
+    """
     dataset = odometry(basedir, seq)
     x = np.array([np.vstack(get_stacked_rgbs(dataset))])
     y = process_poses(dataset)
