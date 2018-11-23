@@ -7,15 +7,12 @@ rather than the first frame of the full sequence. Rotation matrices are
 converted to Euler angles.
 """
 
-import numpy as np
-from odometry import odometry
-from PIL import Image
-import random
-from numpy.linalg import inv
 import math
+import numpy as np
+import os
 
-from os import listdir
-from os.path import isfile, join
+from numpy.linalg import inv
+from odometry import odometry
 
 
 def get_seq_total_frames(seq, basedir):
@@ -34,11 +31,11 @@ def get_seq_total_frames(seq, basedir):
         The 0-indexed count of how many image frames there are in
         this KITTI sequence.
     """
-    path = basedir + "sequences/" + str(seq) + "/image_2/"
+    path = os.path.join(basedir, "sequences", str(seq), "image_2")
 
     # This actually returns the index of the last frame rather than
     # the number of frames, for convenience
-    return len([f for f in listdir(path) if isfile(join(path, f))]) - 1
+    return len(os.listdir(path)) - 1
 
 
 def is_rotation_matrix(r):
@@ -125,14 +122,16 @@ def get_stacked_rgbs(dataset, batch_frames):
             for frame1, frame2 in zip(rgbs, rgbs[1:])]
 
 
-def batcher(basedir, batch_frames, train_seqs):
+def batcher(basedir, kitti_sequence, subsequence_length):
     """
     Creates one batch.
 
     Args:
         basedir: The directory where KITTI data is stored.
-        batch_frames: The number of image pairs in the batch.
-        train_seqs: 
+        kitti_sequence: The KITTI driving sequence to split into
+                        subsequences.
+        batch_size: The number of image pairs (samples) in the batch.
+        subsequence_length: The number of image pairs (samples)
 
     Returns:
         A batch of the form
@@ -141,23 +140,45 @@ def batcher(basedir, batch_frames, train_seqs):
 
         for consumption by Keras, where x is data and y is labels.
     """
-    # Select a sequence at random.
-    sequence = random.choice(train_seqs)
 
-    max_frame = get_seq_total_frames(sequence)
-    first_frame = random.randint(0, max_frame - batch_frames + 1)
-    last_frame = first_frame + batch_frames
+    # Get the index of the final image frames in that sequence
+    max_frame_index = get_seq_total_frames(sequence, basedir)
 
-    # Load the data. Specify the frame range to load.
+    # Choose a subsequence at random. The upper bound on the starting
+    # frame of the subsequence is picked so that we will always
+    # have (subsequence_length + 1) frames available
+    first_frame_index = np.random.randint(0, max_frame_index - subsequence_length + 1)  # [low, high)
+    last_frame_index = first_frame_index + subsequence_length
+
+    # Load the data. Specify the frame range to load
     dataset = odometry(basedir,
                        sequence,
-                       frames=range(first_frame, last_frame))
+                       frames=range(first_frame_index, last_frame_index))
 
-    x = np.array([np.vstack(get_stacked_rgbs(dataset, batch_frames))])
+    x = np.array([np.vstack(get_stacked_rgbs(dataset, subsequence_length))])
     y = process_poses(dataset)
 
-    return {'x': x, 'y': y}
+    return (x, y)
 
+def get_samples(basedir, seq):
+    dataset = odometry(basedir, kitti_sequence)
+    x = np.array([np.vstack(get_stacked_rgbs(dataset))])
+    y = process_poses(dataset)
+
+    return (x, y)
+
+# http://philipperemy.github.io/keras-stateful-lstm/
+def prepare_sequences(x_train, y_train, window_length):
+    windows = []
+    windows_y = []
+    for i, sequence in enumerate(x_train):
+        len_seq = len(sequence)
+        for window_start in range(0, len_seq - window_length + 1):
+            window_end = window_start + window_length
+            window = sequence[window_start:window_end]
+            windows.append(window)
+            windows_y.append(y_train[i])
+    return np.array(windows), np.array(windows_y)
 
 def test_batch(basedir, seq):
     """Process images and ground truth for a test sequence.
