@@ -1,7 +1,7 @@
 Go to: http://www.cvlibs.net/datasets/kitti/eval_odometry.php
 
-and download the odometry data set (color), odometry data set (calibration files), and odometry ground truth poses. Extract all of the data into the data/ folder.
+and download the odometry data set (color), odometry data set (calibration files), and odometry ground truth poses. Extract the dataset folder to a drive with ~70 GB of space, and then change the DATA path in the project root's Makefile.
 
-The docker container has the project root mounted, so this data will be accessible from the container.
+The Makefile mounts the DATA folder to this data/ folder, so the data will be accessible from the container.
 
-This data can not be stored in version control, as it is around 66 GB.
+This data is not stored in version control, as it is around 66 GB.

@@ -3,7 +3,8 @@ help:
 
 DATA?="/home/noah/kitti_data/dataset"
 GPU?=0
-DOCKER_FILE=docker/Dockerfile
+KERAS_DOCKER_FILE=docker/Dockerfile
+CAFFE_DOCKER_FILE=flownet2/docker/standalone/gpu/Dockerfile
 DOCKER=GPU=$(GPU) nvidia-docker
 BACKEND=tensorflow
 PYTHON_VERSION?=3.6
@@ -11,18 +12,18 @@ CUDA_VERSION?=9.0
 CUDNN_VERSION?=7
 TEST=tests/
 SRC=$(shell pwd)
+CAFFE-TAG="caffe:gpu"
+KERAS-TAG="keras"
 
-build:
-	docker build -t keras --build-arg python_version=$(PYTHON_VERSION) --build-arg cuda_version=$(CUDA_VERSION) --build-arg cudnn_version=$(CUDNN_VERSION) -f $(DOCKER_FILE) .
+build-caffe:
+	docker build -t $(CAFFE-TAG) -f $(CAFFE_DOCKER_FILE) docker/
 
-bash: build
-	$(DOCKER) run -it -v $(SRC):/src/workspace -v $(DATA):/src/workspace/data/dataset --env KERAS_BACKEND=$(BACKEND) keras bash
+build-keras:
+	docker build -t $(KERAS-TAG) --build-arg python_version=$(PYTHON_VERSION) --build-arg cuda_version=$(CUDA_VERSION) --build-arg cudnn_version=$(CUDNN_VERSION) -f $(KERAS_DOCKER_FILE) docker/
 
-ipython: build
-	$(DOCKER) run -it -v $(SRC):/src/workspace -v $(DATA):/src/workspace/data/dataset --env KERAS_BACKEND=$(BACKEND) keras ipython
+caffe: build-caffe
+	$(DOCKER) run -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset $(CAFFE-TAG) bash
 
-notebook: build
-	$(DOCKER) run -it -v $(SRC):/src/workspace -v $(DATA):/src/workspace/data/dataset --net=host --env KERAS_BACKEND=$(BACKEND) keras
+keras: build-keras
+	$(DOCKER) run -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset --env KERAS_BACKEND=$(BACKEND) $(KERAS-TAG) bash
 
-test: build
-	$(DOCKER) run -it -v $(SRC):/src/workspace -v $(DATA):/src/workspace/data/dataset --env KERAS_BACKEND=$(BACKEND) keras py.test $(TEST)

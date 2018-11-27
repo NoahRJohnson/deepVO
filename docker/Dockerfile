@@ -1,18 +1,30 @@
+# Merge Keras and Caffe dockers with GPU support
+
 ARG cuda_version=9.0
 ARG cudnn_version=7
 FROM nvidia/cuda:${cuda_version}-cudnn${cudnn_version}-devel
 
 # Install system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential \
       bzip2 \
+      cmake \
       g++ \
       git \
       graphviz \
       libgl1-mesa-glx \
       libhdf5-dev \
+      libjpeg-dev \
+      libpng-dev \
       openmpi-bin \
+      vim \
       wget && \
     rm -rf /var/lib/apt/lists/*
+
+
+###
+# Install Keras
+###
 
 # Install conda
 ENV CONDA_DIR /opt/conda
@@ -25,18 +37,8 @@ RUN wget --quiet --no-check-certificate https://repo.continuum.io/miniconda/Mini
     echo export PATH=$CONDA_DIR/bin:'$PATH' > /etc/profile.d/conda.sh
 
 # Install Python packages and keras
-ENV NB_USER keras
-ENV NB_UID 1000
-
-RUN useradd -m -s /bin/bash -N -u $NB_UID $NB_USER && \
-    chown $NB_USER $CONDA_DIR -R && \
-    mkdir -p /src && \
-    chown $NB_USER /src
-
-USER $NB_USER
 
 ARG python_version=3.6
-
 RUN conda install -y python=${python_version} && \
     pip install --upgrade pip && \
     pip install \
@@ -45,18 +47,25 @@ RUN conda install -y python=${python_version} && \
       cntk-gpu && \
     conda install \
       bcolz \
+      cython \
       h5py \
+      ipython \
       matplotlib \
       mkl \
+      mkl-include \
       nose \
       notebook \
+      numpy \
       Pillow \
       pandas \
       pydot \
       pygpu \
       pyyaml \
       scikit-learn \
-      six && \
+      scipy \
+      six \
+      typing && \
+    conda install -y -c pytorch magma-cuda90 && \
     git clone git://github.com/keras-team/keras.git /src && pip install -e /src[tests] && \
     pip install git+git://github.com/keras-team/keras.git && \
     conda clean -yt
@@ -64,7 +73,7 @@ RUN conda install -y python=${python_version} && \
 
 ENV PYTHONPATH='/src/:$PYTHONPATH'
 
-WORKDIR /src/workspace
+WORKDIR /workspace
 
 EXPOSE 8888
 
