@@ -143,30 +143,26 @@ class Epoch():
         self.n_frames = n_frames
         self.batch_size = batch_size
 
-        self.window_idxs_dict = self.partition_sequences()
+        self.partition_sequences()
 
     def is_complete(self):
-        for seq_no, idx_dict in self.window_idxs_dict.items():
-            if len(idx_dict) > 0:
-                return False
+        if len(self.window_idxs) > 0:
+            return False
         else:
             return True
 
     def partition_sequences(self):
-        idx_dict = {seq_no: None for seq_no in self.train_seq_nos}
-        for seq_no in idx_dict:
-            windows = []
+        for seq_no in self.train_seq_nos:
             len_seq = len(os.listdir(join(self.traindir, seq_no)))
             for window_start in range(1, len_seq - self.n_frames + 1,
                                       self.step_size):
                 window_end = window_start + self.n_frames + 1
-                windows.append((window_start, window_end))
-            random.shuffle(windows)
-            idx_dict[seq_no] = windows
-        return idx_dict
+                self.window_idxs.append((seq_no, (window_start, window_end)))
+        random.shuffle(self.window_idxs)
 
-    def get_sample(self, seq, window_bounds):
+    def get_sample(self, window_idx):
         """Create one sample."""
+        seq, window_bounds = window_idx
         seq_path = join(self.traindir, seq)
         frame_nos = range(*(window_bounds))
 
