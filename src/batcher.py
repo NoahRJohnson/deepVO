@@ -160,9 +160,9 @@ def batcher(basedir, kitti_sequence, subsequence_length):
 
     return (x, y)
 
-def get_samples(basedir, seq):
-    dataset = odometry(basedir, kitti_sequence)
-    x = np.array([np.vstack(get_stacked_rgbs(dataset))])
+def get_samples(basedir, seq, batch_size):
+    dataset = odometry(basedir, seq)
+    x = np.array([np.vstack(get_stacked_rgbs(dataset, batch_size))])
     y = process_poses(dataset)
 
     return (x, y)

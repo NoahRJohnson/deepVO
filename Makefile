@@ -1,7 +1,7 @@
 help:
 	@cat Makefile
 
-DATA?="/home/noah/kitti_data/dataset"
+DATA?="/media/gpudata_backup/kitti/dataset/"
 GPU?=0
 KERAS_DOCKER_FILE=docker/Dockerfile
 CAFFE_DOCKER_FILE=flownet2/docker/standalone/gpu/Dockerfile
