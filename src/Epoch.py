@@ -209,7 +209,7 @@ class Epoch():
         frame_nos = range(*(window_bounds))
 
         x = [np.array(Image.open(join(seq_path,
-                                 "{i}.png".format(i=frame_no))))
+                                 "{i}.flo".format(i=frame_no))))
                .flatten()
              for frame_no in frame_nos]
 
