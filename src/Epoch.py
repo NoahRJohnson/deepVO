@@ -183,7 +183,12 @@ class Epoch():
         x = []
         y = []
         for sample in range(self.batch_size):
+            empty_idx_dicts = []
             seq = random.choice(self.train_seq_nos)
+            while len(self.window_idxs_dict[seq]) == 0:
+                empty_idx_dicts.append(seq)
+                seq = random.choice([key for key in self.window_idxs_dict
+                                     if key not in empty_idx_dicts])
             window_bounds = self.window_idxs_dict[seq].pop()
             sample_x, sample_y = self.get_sample(seq, window_bounds)
             x.append(sample_x)
