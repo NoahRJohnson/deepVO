@@ -127,12 +127,29 @@ class Epoch():
     """Create batches of sub-sequences.
 
     Divide all train sequences into subsequences
-    and yield batches subsequences without repetition
+    and yield batches of subsequences without repetition
     until all subsequences have been exhausted.
-     """
+    """
 
     def __init__(self, datadir, traindir, train_seq_nos,
                  step_size, n_frames, batch_size):
+        """Initialize.
+
+        Args:
+            datadir: The directory where the kitti `sequences` folder
+                     is located.
+            traindir: The directory where the flownet images are
+            train_seq_nos: list of strings corresponding to kitti
+                           sequences in the training set
+            step_size: int. Step size for sliding window in sequence
+                       partitioning
+            n_frames: Number of frames per window in sequence
+                      partitioning.
+            batch_size: Number of samples (subsequences) per batch.
+                        Final batch may be smaller if batch_size is
+                        greater than the number of subsequences remaining
+                        when get_batch() is called.
+        """
         if step_size > n_frames:
             print("WARNING: step_size greater than n_frames. "
                   "This will result in unseen sequence frames.")
@@ -147,12 +164,25 @@ class Epoch():
         self.partition_sequences()
 
     def is_complete(self):
+        """Stop serving batches if there are no more unused subsequences."""
         if len(self.window_idxs) > 0:
             return False
         else:
             return True
 
     def partition_sequences(self):
+        """Partition a sequence into subsequences.
+
+        Create subsequences of length n_frames, with starting indices
+        staggered by step_size.
+
+        NOTES: This will NOT output a short, final subsequence if the
+        arithmetic doesn't work out nicely. Doing so would screw up
+        the dimensions everywhere unless the final subsequence was
+        zero-buffered to length n_frames, which could cause other issues.
+        ALSO: self.step_size > self.n_frames will result in frames from
+        the full sequence failing to appear in the epoch.
+        """
         for seq_no in self.train_seq_nos:
             len_seq = len(os.listdir(join(self.traindir, seq_no)))
             for window_start in range(1, len_seq - self.n_frames + 1,
@@ -162,12 +192,25 @@ class Epoch():
         random.shuffle(self.window_idxs)
 
     def get_sample(self, window_idx):
-        """Create one sample."""
+        """Create one sample.
+
+        Create one n_frames long subsequence.
+
+        Args:
+            windox_idx: (seq_no, (start_frame, end_frame + 1))
+
+        Returns:
+            (x, y):
+                x: An (n_frames, HxWx3) array of flownet image pixels
+                y: An (n_frames, 6) array of ground truth poses
+        """
         seq, window_bounds = window_idx
         seq_path = join(self.traindir, seq)
         frame_nos = range(*(window_bounds))
 
-        x = [np.array(Image.open(join(seq_path, "{i}.png".format(i=frame_no))))
+        x = [np.array(Image.open(join(seq_path,
+                                 "{i}.png".format(i=frame_no))))
+               .flatten()
              for frame_no in frame_nos]
 
         x = np.array(x)
@@ -177,6 +220,15 @@ class Epoch():
         return (x, y)
 
     def get_batch(self):
+        """Get a batch.
+
+        Returns:
+            (x, y):
+                x: A (batch_size, n_frames, HxWx3) np array of subsequences.
+                y: A (batch_size, n_frames, HxWx3) np array of ground truth
+                   pose vectors.
+        NOTE: See __init__ docstring note about batch_size.
+        """
         x = []
         y = []
         for sample in range(self.batch_size):
