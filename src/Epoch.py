@@ -179,18 +179,9 @@ class Epoch():
     def get_batch(self):
         x = []
         y = []
-        empty_idx_dicts = set()
         for sample in range(self.batch_size):
-            seq = random.choice(self.train_seq_nos)
-            print("seq: ", seq)
-            while len(self.window_idxs_dict[seq]) == 0 and not self.is_complete():
-                print(len(empty_idx_dicts), len(self.window_idxs_dict))
-                empty_idx_dicts.add(seq)
-                print(empty_idx_dicts)
-                seq = random.choice([key for key in self.window_idxs_dict
-                                     if key not in empty_idx_dicts])
-            window_bounds = self.window_idxs_dict[seq].pop()
-            sample_x, sample_y = self.get_sample(seq, window_bounds)
+            window_idx = self.window_idxs.pop()
+            sample_x, sample_y = self.get_sample(window_idx)
             x.append(sample_x)
             y.append(sample_y)
         x = np.array(x)
