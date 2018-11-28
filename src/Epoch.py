@@ -137,7 +137,7 @@ class Epoch():
             print("WARNING: step_size greater than n_frames. "
                   "This will result in unseen sequence frames.")
         self.traindir = traindir
-        self.datadir
+        self.datadir = datadir
         self.train_seq_nos = train_seq_nos
         self.step_size = step_size
         self.n_frames = n_frames
@@ -146,7 +146,7 @@ class Epoch():
         self.window_idxs_dict = self.partition_sequences()
 
     def is_complete(self):
-        for seq_no, idx_dic in self.window_idxs_dict.items():
+        for seq_no, idx_dict in self.window_idxs_dict.items():
             if len(idx_dict) > 0:
                 return False
         else:
@@ -157,7 +157,7 @@ class Epoch():
         for seq_no in idx_dict:
             windows = []
             len_seq = len(os.listdir(join(self.traindir, seq_no)))
-            for window_start in range(0, len_seq - self.n_frames + 1,
+            for window_start in range(1, len_seq - self.n_frames + 1,
                                       self.step_size):
                 window_end = window_start + self.n_frames + 1
                 windows.append((window_start, window_end))
@@ -175,7 +175,7 @@ class Epoch():
 
         x = np.array(x)
 
-        raw_poses = odometry(self.datadir, seq, frames=range(frame_nos)).poses
+        raw_poses = odometry(self.datadir, seq, frames=frame_nos).poses
         y = process_poses(raw_poses)
         return (x, y)
 
