@@ -1,7 +1,6 @@
-# Using Keras via Docker
+# Using Caffe/Keras via Docker
 
-This directory contains `Dockerfile` to make it easy to get up and running with
-Keras via [Docker](http://www.docker.com/).
+This directory contains `Dockerfiles` to make it easy to get up and running with Keras and Caffe via [Docker](http://www.docker.com/).
 
 ## Installing Docker
 
@@ -16,22 +15,18 @@ quick links here:
 
 We are using `Makefile` to simplify docker commands within make commands. This Makefile is in the project root.
 
-Build the container and start a Jupyter Notebook
+Build and run the Keras container
 
-    $ make notebook
+    $ make keras
 
-Build the container and start an iPython shell
+Build and run the Caffe container
 
-    $ make ipython
-
-Build the container and start a bash
-
-    $ make bash
+    $ make caffe
 
 For GPU support install NVIDIA drivers (ideally latest) and
 [nvidia-docker](https://github.com/NVIDIA/nvidia-docker). Run using
 
-    $ make notebook GPU=0 # or [ipython, bash]
+    $ make keras GPU=0 # or [caffe]
 
 Mount a volume for external data sets
 
@@ -41,11 +36,3 @@ Prints all make tasks
 
     $ make help
 
-
-Note: If you would have a problem running nvidia-docker you may try the old way
-we have used. But it is not recommended. If you find a bug in the nvidia-docker report
-it there please and try using the nvidia-docker as described above.
-
-    $ export CUDA_SO=$(\ls /usr/lib/x86_64-linux-gnu/libcuda.* | xargs -I{} echo '-v {}:{}')
-    $ export DEVICES=$(\ls /dev/nvidia* | xargs -I{} echo '--device {}:{}')
-    $ docker run -it -p 8888:8888 $CUDA_SO $DEVICES gcr.io/tensorflow/tensorflow:latest-gpu

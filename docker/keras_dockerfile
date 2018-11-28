@@ -1,4 +1,4 @@
-# Merge Keras and Caffe dockers with GPU support
+# Keras with GPU support
 
 ARG cuda_version=9.0
 ARG cudnn_version=7
@@ -20,11 +20,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       vim \
       wget && \
     rm -rf /var/lib/apt/lists/*
-
-
-###
-# Install Keras
-###
 
 # Install conda
 ENV CONDA_DIR /opt/conda
@@ -75,6 +70,7 @@ ENV PYTHONPATH='/src/:$PYTHONPATH'
 
 WORKDIR /workspace
 
-EXPOSE 8888
+# expose tensorboard and jupyter notebook ports
+EXPOSE 6006 8888
 
 CMD jupyter notebook --port=8888 --ip=0.0.0.0
