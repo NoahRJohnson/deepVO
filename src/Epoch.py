@@ -10,12 +10,12 @@ converted to Euler angles.
 import math
 import numpy as np
 import os
-import Image
 import random
 
 from numpy.linalg import inv
 from odometry import odometry
 from os.path import join
+from PIL import Image
 
 
 def is_rotation_matrix(r):
