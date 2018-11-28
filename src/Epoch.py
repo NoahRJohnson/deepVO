@@ -142,6 +142,7 @@ class Epoch():
         self.step_size = step_size
         self.n_frames = n_frames
         self.batch_size = batch_size
+        self.window_idxs = []
 
         self.partition_sequences()
 
