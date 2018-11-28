@@ -10,32 +10,12 @@ converted to Euler angles.
 import math
 import numpy as np
 import os
+import random
 
 from numpy.linalg import inv
 from odometry import odometry
-
-
-def get_seq_total_frames(seq, basedir):
-    """Get the total number of frames in a KITTI sequence, 0-indexed.
-
-    It's inefficient to pull the whole dataset only to grab a few
-    frames for a batch, so we'll count the number of total frames
-    before we pick an initial frame, then only pull in the desired
-    frames.
-
-    Args:
-        seq: The KITTI sequence number to examine.
-        basedir: The directory where KITTI data is stored.
-
-    Returns:
-        The 0-indexed count of how many image frames there are in
-        this KITTI sequence.
-    """
-    path = os.path.join(basedir, "sequences", str(seq), "image_2")
-
-    # This actually returns the index of the last frame rather than
-    # the number of frames, for convenience
-    return len(os.listdir(path)) - 1
+from os.path import join
+from PIL import Image
 
 
 def is_rotation_matrix(r):
@@ -80,7 +60,7 @@ def rectify_poses(poses):
     first position in the sub-sequence.
 
     Args:
-        poses:  An iterable of 4x4 rotation-translation matrices representing 
+        poses:  An iterable of 4x4 rotation-translation matrices representing
                 the vehicle's pose at each step in the sequence.
 
     Returns:
@@ -95,7 +75,8 @@ def mat_to_pose_vector(pose):
     """Convert the 4x4 rotation-translation matrix into a 6-dim vector.
 
     Args:
-        pose:  The 4x4 rotation-translation matrix representing the vehicle's pose.
+        pose:  The 4x4 rotation-translation matrix representing the vehicle's
+        pose.
 
     Returns:
         The pose represented as a vector.
@@ -106,11 +87,10 @@ def mat_to_pose_vector(pose):
                           pose[:3, 3]))
 
 
-def process_poses(dataset):
+def process_poses(poses):
     """Fully convert subsequence of poses."""
-    poses = dataset.poses
     rectified_poses = rectify_poses(poses)
-    return [mat_to_pose_vector(pose) for pose in rectified_poses]
+    return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
 
 def get_stacked_rgbs(dataset, batch_frames):
@@ -121,64 +101,6 @@ def get_stacked_rgbs(dataset, batch_frames):
     return [np.dstack((frame1, frame2))
             for frame1, frame2 in zip(rgbs, rgbs[1:])]
 
-
-def batcher(basedir, kitti_sequence, subsequence_length):
-    """
-    Creates one batch.
-
-    Args:
-        basedir: The directory where KITTI data is stored.
-        kitti_sequence: The KITTI driving sequence to split into
-                        subsequences.
-        batch_size: The number of image pairs (samples) in the batch.
-        subsequence_length: The number of image pairs (samples)
-
-    Returns:
-        A batch of the form
-
-        {'x': x, 'y': y}
-
-        for consumption by Keras, where x is data and y is labels.
-    """
-
-    # Get the index of the final image frames in that sequence
-    max_frame_index = get_seq_total_frames(sequence, basedir)
-
-    # Choose a subsequence at random. The upper bound on the starting
-    # frame of the subsequence is picked so that we will always
-    # have (subsequence_length + 1) frames available
-    first_frame_index = np.random.randint(0, max_frame_index - subsequence_length + 1)  # [low, high)
-    last_frame_index = first_frame_index + subsequence_length
-
-    # Load the data. Specify the frame range to load
-    dataset = odometry(basedir,
-                       sequence,
-                       frames=range(first_frame_index, last_frame_index))
-
-    x = np.array([np.vstack(get_stacked_rgbs(dataset, subsequence_length))])
-    y = process_poses(dataset)
-
-    return (x, y)
-
-def get_samples(basedir, seq, batch_size):
-    dataset = odometry(basedir, seq)
-    x = np.array([np.vstack(get_stacked_rgbs(dataset, batch_size))])
-    y = process_poses(dataset)
-
-    return (x, y)
-
-# http://philipperemy.github.io/keras-stateful-lstm/
-def prepare_sequences(x_train, y_train, window_length):
-    windows = []
-    windows_y = []
-    for i, sequence in enumerate(x_train):
-        len_seq = len(sequence)
-        for window_start in range(0, len_seq - window_length + 1):
-            window_end = window_start + window_length
-            window = sequence[window_start:window_end]
-            windows.append(window)
-            windows_y.append(y_train[i])
-    return np.array(windows), np.array(windows_y)
 
 def test_batch(basedir, seq):
     """Process images and ground truth for a test sequence.
@@ -195,6 +117,82 @@ def test_batch(basedir, seq):
         for consumption by Keras, where x is data and y is labels.
     """
     dataset = odometry(basedir, seq)
+    poses = dataset.poses
     x = np.array([np.vstack(get_stacked_rgbs(dataset))])
-    y = process_poses(dataset)
+    y = process_poses(poses)
     return {'x': x, 'y': y}
+
+
+class Epoch():
+    """Create batches of sub-sequences.
+
+    Divide all train sequences into subsequences
+    and yield batches subsequences without repetition
+    until all subsequences have been exhausted.
+     """
+
+    def __init__(self, datadir, traindir, train_seq_nos,
+                 step_size, n_frames, batch_size):
+        if step_size > n_frames:
+            print("WARNING: step_size greater than n_frames. "
+                  "This will result in unseen sequence frames.")
+        self.traindir = traindir
+        self.datadir = datadir
+        self.train_seq_nos = train_seq_nos
+        self.step_size = step_size
+        self.n_frames = n_frames
+        self.batch_size = batch_size
+
+        self.window_idxs_dict = self.partition_sequences()
+
+    def is_complete(self):
+        for seq_no, idx_dict in self.window_idxs_dict.items():
+            if len(idx_dict) > 0:
+                return False
+        else:
+            return True
+
+    def partition_sequences(self):
+        idx_dict = {seq_no: None for seq_no in self.train_seq_nos}
+        for seq_no in idx_dict:
+            windows = []
+            len_seq = len(os.listdir(join(self.traindir, seq_no)))
+            for window_start in range(1, len_seq - self.n_frames + 1,
+                                      self.step_size):
+                window_end = window_start + self.n_frames + 1
+                windows.append((window_start, window_end))
+            random.shuffle(windows)
+            idx_dict[seq_no] = windows
+        return idx_dict
+
+    def get_sample(self, seq, window_bounds):
+        """Create one sample."""
+        seq_path = join(self.traindir, seq)
+        frame_nos = range(*(window_bounds))
+
+        x = [np.array(Image.open(join(seq_path, "{i}.png".format(i=frame_no))))
+             for frame_no in frame_nos]
+
+        x = np.array(x)
+
+        raw_poses = odometry(self.datadir, seq, frames=frame_nos).poses
+        y = process_poses(raw_poses)
+        return (x, y)
+
+    def get_batch(self):
+        x = []
+        y = []
+        for sample in range(self.batch_size):
+            empty_idx_dicts = []
+            seq = random.choice(self.train_seq_nos)
+            while len(self.window_idxs_dict[seq]) == 0:
+                empty_idx_dicts.append(seq)
+                seq = random.choice([key for key in self.window_idxs_dict
+                                     if key not in empty_idx_dicts])
+            window_bounds = self.window_idxs_dict[seq].pop()
+            sample_x, sample_y = self.get_sample(seq, window_bounds)
+            x.append(sample_x)
+            y.append(sample_y)
+        x = np.array(x)
+        y = np.array(y)
+        return (x, y)

@@ -36,14 +36,14 @@ def custom_loss_with_beta(beta):
             L_q is the orientation loss,
             and beta is a hyperparameter
         """
-        p_true = K.gather(y_true, (0,1,2))
-        p_pred = K.gather(y_pred, (0,1,2))
-        q_true = K.gather(y_true, (3,4,5))
-        q_pred = K.gather(y_pred, (3,4,5))
+        p_true = K.backend.gather(y_true, (0,1,2))
+        p_pred = K.backend.gather(y_pred, (0,1,2))
+        q_true = K.backend.gather(y_true, (3,4,5))
+        q_pred = K.backend.gather(y_pred, (3,4,5))
         #L_x = K.losses.mean_squared_error(p_true, p_pred)
         #L_q = K.losses.mean_squared_error(q_true, q_pred)
-        L_x = K.mean(K.square(p_pred - p_true), axis=-1)
-        L_q = K.mean(K.square(q_pred - q_true), axis=-1)
+        L_x = K.backend.mean(K.backend.square(p_pred - p_true), axis=-1)
+        L_q = K.backend.mean(K.backend.square(q_pred - q_true), axis=-1)
 
         #wy_pred = K.dot(y_pred, K.variable(np.array([1,1,1, b, b, b])))
         #wy_true = K.dot(y_true, K.variable(np.array([1,1,1, b, b, b])))
@@ -121,13 +121,15 @@ model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 9
 for i in range(args['layer_num']):
     model.add(K.layers.LSTM(args['hidden_dim'],
                             batch_input_shape=(1,1,1),
-                            return_sequences=False,
+                            return_sequences=True,
                             stateful=True))
-model.add(Dense(6, activation='linear'))  # pose values unbounded
+model.add(K.layers.TimeDistributed(K.layers.Dense(6, activation='linear')))  # pose values unbounded
 model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
 
+print("Layers: {}".format(model.layers))
+
 # Create TensorBoard
-tensorboard = keras.callbacks.TensorBoard(
+tensorboard = K.callbacks.TensorBoard(
     log_dir="logs/{}".format(time()))
 # Attach it to our model
 tensorboard.set_model(model)
@@ -146,7 +148,8 @@ if args['mode'] == 'train':
         for kitti_seq in train_seqs:  # in one epoch, go through all of the data
             # Load subsequences to train on
             X, Y = batcher.get_samples(basedir=args['data_dir'],
-                                       seq=kitti_seq)
+                                       seq=kitti_seq,
+                                       batch_size=1)
             for i in range(len(X)):  # looping over samples
                 y_i = np.array([Y[i]])
 
@@ -154,6 +157,8 @@ if args['mode'] == 'train':
                 
                 loss = model.train_on_batch(x_i, y_i)  # update weights
                 losses.append(loss)
+
+                print("TRAINING LOSS: {}".format(np.mean(losses)))
 
             model.reset_states()  # clear LSTM hidden states between kitti sequences
 
@@ -174,7 +179,8 @@ elif args['mode'] == 'test':
 
         # Load subsequences to train on
         X, Y = batcher.get_samples(basedir=args['data_dir'],
-                                   seq=kitti_seq)
+                                           seq=kitti_seq,
+                                           batch_size=1)
         for i in range(len(X)):  # looping over samples
             y_i = np.array([Y[i]])
 
