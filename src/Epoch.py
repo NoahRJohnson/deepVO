@@ -177,13 +177,15 @@ class Epoch():
         return (x, y)
 
     def get_batch(self):
+        print(self.window_idxs)
         x = []
         y = []
         for sample in range(self.batch_size):
-            window_idx = self.window_idxs.pop()
-            sample_x, sample_y = self.get_sample(window_idx)
-            x.append(sample_x)
-            y.append(sample_y)
+            if not self.is_complete():
+                window_idx = self.window_idxs.pop()
+                sample_x, sample_y = self.get_sample(window_idx)
+                x.append(sample_x)
+                y.append(sample_y)
         x = np.array(x)
         y = np.array(y)
         return (x, y)
