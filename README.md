@@ -8,27 +8,37 @@ Following [S. Wang, R. Clark, H. Wen, and N. Trigoni](https://www.cs.ox.ac.uk/fi
 If you don't already have the KITTI odometry benchmark data, you'll need to download it. A download script is available for your convenience.
 
 ```python
-python3 download_kitti_data.py
+python3 download_kitti_data.py /drive/with/space/kitti
 ```
 
 If the download doesn't work anymore, go to the [source](http://www.cvlibs.net/datasets/kitti/eval_odometry.php). Manually download the color, calibration, and ground truth files. You will have to enter an email address, and will get a download link. Download the zipped file, and extract its contents. You should now have a 'dataset' folder, with 'poses' and 'sequences' folders within.
 
-Next, convert the KITTI image frames into optical flow images using FlowNet. Make sure you've pulled submodules first. Use the download script in flownet2/models/ to download networks pre-trained in Caffe. This may take a while. Once that's done, build a Caffe image by going to flownet2/docker and typing:
+Next, convert the KITTI image frames into optical flow images using FlowNet. Make sure you've pulled submodules first, e.g.:
 
 ```bash
-sudo make gpu_standalone
+git submodule update --init
 ```
 
-Once the image is built, you can run the docker container with:
+Use the download script in flownet2/models/ to download pre-trained Caffe networks. This may take a while. Once that's done, build and run a Caffe image using the provided Makefile, which automatically mounts this repository and mounts your kitti data into the 'data' folder:
 
 ```bash
-sudo docker run -ti caffe:gpu python
+make caffe
 ```
 
-Now to avoid setting up CUDA yourself, spin up a docker container for Keras. Use the Makefile, which automatically mounts this repository and mounts your kitti data into the 'data' folder. Just modify the Makefile DATA variable to point to wherever your 'dataset' folder is.
+Just modify the Makefile DATA variable to point to wherever your 'dataset' folder is.
+
 
 ```bash
-sudo make bash
+python3 flownet2/scripts/run-flownet-many.py 
+```
+
+
+Now you should have a flow/ folder within your dataset folder, containing flow images for all of the KITTI sequences. This data, along with the poses/ ground-truth, will be used for training and testing our LSTM network.
+
+As before, build and run a Keras docker container using the Makefile:
+
+```bash
+make keras
 ```
 
 Now you can train the model using:
