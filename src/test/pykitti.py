@@ -15,7 +15,7 @@ __email__ = "lee.clement@robotics.utias.utoronto.ca"
 
 # Change this to the directory where you store KITTI data
 #basedir = 'data/dataset'
-basedir = '/home/noah/kitti_data/dataset'
+basedir = '../../data/dataset/'
 
 # Specify the dataset to load
 sequence = '04'
