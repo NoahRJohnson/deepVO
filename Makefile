@@ -19,10 +19,10 @@ build-caffe:
 build-keras:
 	docker build -t $(KERAS-TAG) -f $(KERAS-DOCKER-FILE) $(NULL-BUILD-CONTEXT)
 
-caffe:
-	$(DOCKER) run --rm -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset $(CAFFE-TAG) bash
+caffe: build-caffe
+	$(DOCKER) run -it -v $(DATA):/workspace/data/dataset $(CAFFE-TAG) bash
 
-keras:
+keras: build-keras
 	$(DOCKER) run --rm -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset --env KERAS_BACKEND=$(KERAS-BACKEND) $(KERAS-TAG) bash
 
 # Specify that no actual files are created from these make commands

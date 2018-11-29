@@ -60,5 +60,5 @@ ENV LD_LIBRARY_PATH $RELEASE_PATH/lib:$LD_LIBRARY_PATH
 ENV PATH $RELEASE_PATH/tools:$RELEASE_PATH/scripts:$PATH
 ENV CAFFE_BIN $RELEASE_PATH/tools/caffe
 
-# Switch a working directory
+# Switch to a working directory
 WORKDIR /workspace
