@@ -123,6 +123,32 @@ def test_batch(basedir, seq):
     return {'x': x, 'y': y}
 
 
+def read_flow(name):
+    """Open .flo file as np array.
+
+    Args:
+        name: string path to file
+
+    Returns:
+        Flat numpy array
+    """
+    if name.endswith('.pfm') or name.endswith('.PFM'):
+        return readPFM(name)[0][:,:,0:2]
+
+    f = open(name, 'rb')
+
+    header = f.read(4)
+    if header.decode("utf-8") != 'PIEH':
+        raise Exception('Flow file header does not contain PIEH')
+
+    width = np.fromfile(f, np.int32, 1).squeeze()
+    height = np.fromfile(f, np.int32, 1).squeeze()
+
+    flow = np.fromfile(f, np.float32, width * height * 2).reshape((height, width, 2))
+
+return flow.astype(np.float32)
+
+
 class Epoch():
     """Create batches of sub-sequences.
 
@@ -208,9 +234,8 @@ class Epoch():
         seq_path = join(self.traindir, seq)
         frame_nos = range(*(window_bounds))
 
-        x = [np.array(Image.open(join(seq_path,
-                                 "{i}.png".format(i=frame_no))))
-               .flatten()
+        x = [read_flow(join(seq_path,
+                            "{i}.flo".format(i=frame_no)))
              for frame_no in frame_nos]
 
         x = np.array(x)
