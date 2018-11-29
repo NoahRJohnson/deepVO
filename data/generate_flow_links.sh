@@ -21,7 +21,12 @@ if [ ! -d "$FLOWS_FOLDER" ]; then
     mkdir "$FLOWS_FOLDER"
 fi
 
+# The output .txt file with "x.png y.png z.flo" lines for use by flownet2
 OUT_FILE="$DATA_DIR"/flow_links.txt
+# Delete file if it already exists, so we can remake it
+if [ -f "$OUT_FILE" ]; then
+    rm "$OUT_FILE"
+fi
 
 # Loop over every sequence
 for seq_path in "$SEQUENCES_FOLDER"/*/ ; do
