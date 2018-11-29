@@ -1,7 +1,7 @@
 # Caffe with GPU support
 
-ARG cuda_version=9.0
-ARG cudnn_version=7
+ARG cuda_version=8.0
+ARG cudnn_version=5
 FROM nvidia/cuda:${cuda_version}-cudnn${cudnn_version}-devel
 
 # Install system packages
@@ -24,24 +24,41 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python-dev \
         python-numpy \
         python-pip \
-        python-scipy && \
+        python-setuptools \
+        python-scipy \
+        vim && \
     rm -rf /var/lib/apt/lists/*
 
+# Define where we'll place flownet2 and its Caffe files
 ENV CAFFE_ROOT=/opt/caffe
+
+# Switch to that directory
 WORKDIR $CAFFE_ROOT
 
-# FIXME: clone a specific git tag and use ARG instead of ENV once DockerHub supports this.
-ENV CLONE_TAG=master
+# Copy build context into caffe root (should be flownet2 root)
+COPY . .
 
-RUN git clone -b ${CLONE_TAG} --depth 1 https://github.com/BVLC/caffe.git . && \
-    for req in $(cat python/requirements.txt) pydot; do pip install $req; done && \
-    mkdir build && cd build && \
-    cmake -DUSE_CUDNN=1 .. && \
-    make -j"$(nproc)"
+# Download required python libraries
+RUN python -m pip install --upgrade pip && \
+    for req in $(cat python/requirements.txt) pydot; do pip install $req; done
 
+# Fix Caffe Makefile parameters (https://gist.github.com/wangruohui/679b05fcd1466bb0937f#fix-hdf5-naming-problem)
+RUN cp Makefile.config.example Makefile.config && \
+    sed -i -e 's/# USE_CUDNN := 1/USE_CUDNN := 1/' Makefile.config && \
+    sed -i -e '/^INCLUDE_DIRS := $(PYTHON_INCLUDE)/s/$/ \/usr\/include\/hdf5\/serial\//' Makefile.config && \
+    sed -i -e 's/LIBRARIES += glog gflags protobuf boost_system boost_filesystem m hdf5_hl hdf5/LIBRARIES += glog gflags protobuf boost_system boost_filesystem m hdf5_serial_hl hdf5_serial/' Makefile
+
+# Build caffe and pycaffe
+RUN make -j"$(nproc)" all tools pycaffe
+
+# Set paths
 ENV PYCAFFE_ROOT $CAFFE_ROOT/python
 ENV PYTHONPATH $PYCAFFE_ROOT:$PYTHONPATH
-ENV PATH $CAFFE_ROOT/build/tools:$PYCAFFE_ROOT:$PATH
-RUN echo "$CAFFE_ROOT/build/lib" >> /etc/ld.so.conf.d/caffe.conf && ldconfig
 
+ENV RELEASE_PATH $CAFFE_ROOT/build
+ENV LD_LIBRARY_PATH $RELEASE_PATH/lib:$LD_LIBRARY_PATH
+ENV PATH $RELEASE_PATH/tools:$RELEASE_PATH/scripts:$PATH
+ENV CAFFE_BIN $RELEASE_PATH/tools/caffe
+
+# Switch a working directory
 WORKDIR /workspace
