@@ -1,0 +1,3 @@
+[submodule "flownet2"]
+	path = flownet2
+	url = https://github.com/NoahRJohnson/flownet2.git

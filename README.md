@@ -19,7 +19,7 @@ Next, convert the KITTI image frames into optical flow images using FlowNet. Mak
 git submodule update --init
 ```
 
-Use the download script in flownet2/models/ to download pre-trained Caffe networks. This may take a while. Once that's done, build and run a Caffe image using the provided Makefile, which automatically mounts this repository and mounts your kitti data into the 'data' folder:
+Use the download script in flownet2/models/ to download pre-trained Caffe networks. This may take a while. Once that's done, build and run a Caffe image using the provided Makefile, which mounts your kitti data into the 'data/dataset' folder:
 
 ```bash
 make caffe
@@ -29,16 +29,24 @@ Just modify the Makefile DATA variable to point to wherever your 'dataset' folde
 
 
 ```bash
-python3 flownet2/scripts/run-flownet-many.py \
+python flownet2/scripts/run-flownet.py \
         flownet2/models/FlowNet2/FlowNet2_weights.caffemodel.h5 \
         flownet2/models/FlowNet2/FlowNet2_deploy.prototxt.template \
-        data/dataset
+        data/dataset/sequences/00/image_2/000000.png \
+        data/dataset/sequences/00/image_2/000001.png \
+        data/dataset/flows/00/1.flo
 
-python3 flownet2/scripts/run-flownet-many.py 
+python flownet2/scripts/run-flownet-many.py \
+        flownet2/models/FlowNet2/FlowNet2_weights.caffemodel.h5 \
+        flownet2/models/FlowNet2/FlowNet2_deploy.prototxt.template \
+        data/flow_links.txt
+
 ```
 
 
 Now you should have a flow/ folder within your dataset folder, containing flow images for all of the KITTI sequences. This data, along with the poses/ ground-truth, will be used for training and testing our LSTM network.
+
+If you want to visualize these .flo images, use the flow-code library.
 
 As before, build and run a Keras docker container using the Makefile:
 
