@@ -20,7 +20,7 @@ build-keras:
 	docker build -t $(KERAS-TAG) -f $(KERAS-DOCKER-FILE) $(NULL-BUILD-CONTEXT)
 
 caffe:
-	$(DOCKER) run -it -v $(DATA):/workspace/data/dataset $(CAFFE-TAG) bash
+	$(DOCKER) run -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset $(CAFFE-TAG) bash
 
 keras:
 	$(DOCKER) run --rm -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset --env KERAS_BACKEND=$(KERAS-BACKEND) $(KERAS-TAG) bash
