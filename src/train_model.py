@@ -13,7 +13,7 @@ ap.add_argument('--beta', type=int, default=100, help='Weight on orientation los
 ap.add_argument('--hidden_dim', type=int, default=1000, help='Dimension of LSTM hidden state')
 ap.add_argument('--layer_num', type=int, default=2, help='How many LSTM layers to stack')
 ap.add_argument('--num_epochs', type=int, default=20, help='How many full passes to make over the training data')
-ap.add_argument('--seq_length', type=int, default=50, help='How many timestamps of image frame pairs to include in one subsequence during training. Affects memory consumption.')
+ap.add_argument('--subseq_length', type=int, default=50, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
 ap.add_argument('--mode', default = 'train', help="train or test. Train produces model checkpoints, test outputs csvs of poses for each testing sequence.")
 #ap.add_argument('--weights', default='')
 
@@ -51,78 +51,18 @@ def custom_loss_with_beta(beta):
         return (L_x + beta * L_q)
     return weighted_mse 
 
+E = Epoch()
+num_features = E.get_num_features()
+
 model = K.models.Sequential()
-"""
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 1
-                              filters=64,
-                              activation='relu',
-                              kernel_size=(7, 7 , 2),
-                              data_format='channels_last')
-                              padding='same',
-                              strides=(2, 2, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 2
-                              filters=128,
-                              activation='relu',
-                              kernel_size=(5, 5, 2),
-                              data_format='channels_last')
-                              padding='same',
-                              strides=(2, 2, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 3
-                             filters=256,
-                             activation='relu',
-                             kernel_size=(5, 5, 2),
-                             data_format='channels_last')
-                             padding='same',
-                             strides=(2, 2, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 4
-                             filters=256,
-                             activation='relu',
-                             kernel_size=(3, 3, 2),
-                             data_format='channels_last')
-                             padding='same',
-                             strides=(1, 1, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 5
-                             filters=512,
-                             activation='relu',
-                             kernel_size=(3, 3, 2),
-                             data_format='channels_last')
-                             padding='same',
-                             strides=(2, 2, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 6
-                             filters=512,
-                             activation='relu',
-                             kernel_size=(3, 3, 2),
-                             data_format='channels_last')
-                             padding='same',
-                             strides=(1, 1, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 7
-                             filters=512,
-                             activation='relu',
-                             kernel_size=(3, 3, 2),
-                             data_format='channels_last')
-                             padding='same',
-                             strides=(2, 2, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 8
-                             filters=512,
-                             activation='relu',
-                             kernel_size=(3, 3, 2),
-                             data_format='channels_last')
-                             padding='same',
-                             strides=(1, 1, 1))
-model.add(K.layers.Conv3d(input_shape=(1392, 512, 2, 3),  # 9
-                             filters=1024,
-                             activation='none',
-                             kernel_size=(3, 3, 2),
-                             data_format='channels_last')
-                             padding='same',
-                             strides=(2, 2, 1))
-"""
+
 # Stacked LSTM layers
 for i in range(args['layer_num']):
     model.add(K.layers.LSTM(args['hidden_dim'],
-                            batch_input_shape=(1,1,1),
-                            return_sequences=True,
-                            stateful=True))
+                            batch_input_shape=(args['batch_size'],
+                                               args['subseq_length'],
+                                               num_features),
+                            return_sequences=True))
 model.add(K.layers.TimeDistributed(K.layers.Dense(6, activation='linear')))  # pose values unbounded
 model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
 
@@ -136,7 +76,8 @@ tensorboard.set_model(model)
 
 # Separate the sequences for which there is ground truth into test 
 # and train according to the paper's partition. 
-train_seqs = ['00', '02', '08', '09'] 
+#train_seqs = ['00', '02', '08', '09'] 
+train_seqs = ['00', '01', '02'] # until we finish generating
 test_seqs = ['03', '04', '05', '06', '07', '10']
 
 if args['mode'] == 'train':

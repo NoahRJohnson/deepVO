@@ -1,10 +1,10 @@
 """Generate batches for training.
 
-A batch is of size one, meaning one sub-sequence. A sub-sequence contains
-batch_size frames. Ground truth for the subsequence is modified so that
-translations and rotations are relative to the first frame of the sub-sequence
-rather than the first frame of the full sequence. Rotation matrices are
-converted to Euler angles.
+A batch consists of samples, where each sample is a sub-sequence. A sub-
+sequence contains batch_size frames. Ground truth for the subsequence is 
+modified so that translations and rotations are relative to the first 
+frame of the sub-sequence rather than the first frame of the full 
+sequence. Rotation matrices are converted to Euler angles.
 """
 
 import math
@@ -93,36 +93,6 @@ def process_poses(poses):
     return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
 
-def get_stacked_rgbs(dataset, batch_frames):
-    """Return list of dstacked rbg images."""
-    rgbs = [np.array(left_cam) for left_cam, _ in dataset.rgb]
-    mean_rgb = sum(rgbs) / float(batch_frames)
-    rgbs = [rgb - mean_rgb for rgb in rgbs]
-    return [np.dstack((frame1, frame2))
-            for frame1, frame2 in zip(rgbs, rgbs[1:])]
-
-
-def test_batch(basedir, seq):
-    """Process images and ground truth for a test sequence.
-
-    Args:
-        basedir: The directory where KITTI data is stored.
-        seq: The KITTI sequence number to test.
-
-    Returns:
-        A batch of the form
-
-        {'x': x, 'y': y}
-
-        for consumption by Keras, where x is data and y is labels.
-    """
-    dataset = odometry(basedir, seq)
-    poses = dataset.poses
-    x = np.array([np.vstack(get_stacked_rgbs(dataset))])
-    y = process_poses(poses)
-    return {'x': x, 'y': y}
-
-
 class Epoch():
     """Create batches of sub-sequences.
 
@@ -131,33 +101,34 @@ class Epoch():
     until all subsequences have been exhausted.
     """
 
-    def __init__(self, datadir, traindir, train_seq_nos,
-                 step_size, n_frames, batch_size):
+    def __init__(self, datadir, flowdir, train_seq_nos,
+                 window_size, step_size, batch_size):
         """Initialize.
 
         Args:
             datadir: The directory where the kitti `sequences` folder
                      is located.
-            traindir: The directory where the flownet images are
+            flowdir: The directory where the flownet images are
             train_seq_nos: list of strings corresponding to kitti
                            sequences in the training set
+            window_size: Number of flow images per window in sequence
+                         partitioning, i.e. subsequence length.
             step_size: int. Step size for sliding window in sequence
                        partitioning
-            n_frames: Number of frames per window in sequence
-                      partitioning.
             batch_size: Number of samples (subsequences) per batch.
                         Final batch may be smaller if batch_size is
                         greater than the number of subsequences remaining
                         when get_batch() is called.
         """
-        if step_size > n_frames:
-            print("WARNING: step_size greater than n_frames. "
+        if step_size > window_size:
+            print("WARNING: step_size greater than window size. "
                   "This will result in unseen sequence frames.")
+
         self.traindir = traindir
         self.datadir = datadir
         self.train_seq_nos = train_seq_nos
+        self.window_size = window_size
         self.step_size = step_size
-        self.n_frames = n_frames
         self.batch_size = batch_size
         self.window_idxs = []
 
@@ -173,36 +144,36 @@ class Epoch():
     def partition_sequences(self):
         """Partition a sequence into subsequences.
 
-        Create subsequences of length n_frames, with starting indices
+        Create subsequences of length window_size, with starting indices
         staggered by step_size.
 
         NOTES: This will NOT output a short, final subsequence if the
         arithmetic doesn't work out nicely. Doing so would screw up
         the dimensions everywhere unless the final subsequence was
-        zero-buffered to length n_frames, which could cause other issues.
-        ALSO: self.step_size > self.n_frames will result in frames from
+        zero-buffered to length window_size, which could cause other issues.
+        ALSO: self.step_size > self.window_size will result in frames from
         the full sequence failing to appear in the epoch.
         """
         for seq_no in self.train_seq_nos:
             len_seq = len(os.listdir(join(self.traindir, seq_no)))
-            for window_start in range(1, len_seq - self.n_frames + 1,
+            for window_start in range(1, len_seq - self.window_size + 1,
                                       self.step_size):
-                window_end = window_start + self.n_frames + 1
+                window_end = window_start + self.window_size + 1
                 self.window_idxs.append((seq_no, (window_start, window_end)))
         random.shuffle(self.window_idxs)
 
     def get_sample(self, window_idx):
         """Create one sample.
 
-        Create one n_frames long subsequence.
+        Create one window_size long subsequence.
 
         Args:
             windox_idx: (seq_no, (start_frame, end_frame + 1))
 
         Returns:
             (x, y):
-                x: An (n_frames, HxWx3) array of flownet image pixels
-                y: An (n_frames, 6) array of ground truth poses
+                x: A (window_size, HxWx3) array of flownet image pixels
+                y: A (window_size, 6) array of ground truth poses
         """
         seq, window_bounds = window_idx
         seq_path = join(self.traindir, seq)
@@ -224,8 +195,8 @@ class Epoch():
 
         Returns:
             (x, y):
-                x: A (batch_size, n_frames, HxWx3) np array of subsequences.
-                y: A (batch_size, n_frames, HxWx3) np array of ground truth
+                x: A (batch_size, window_size, HxWx3) np array of subsequences.
+                y: A (batch_size, window_size, HxWx3) np array of ground truth
                    pose vectors.
         NOTE: See __init__ docstring note about batch_size.
         """
