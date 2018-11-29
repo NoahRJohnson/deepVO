@@ -1,7 +1,7 @@
 help:
 	@cat Makefile
 
-DATA?="/home/noah/kitti_data/dataset/"
+DATA?="/media/gpudata_backup/kitti/dataset/"
 GPU?=0
 KERAS-DOCKER-FILE=docker/keras_dockerfile
 CAFFE-DOCKER-FILE=docker/caffe_dockerfile
@@ -23,5 +23,7 @@ caffe: build-caffe
 	$(DOCKER) run -it -v $(DATA):/workspace/data/dataset $(CAFFE-TAG) bash
 
 keras: build-keras
-	$(DOCKER) run -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset --env KERAS_BACKEND=$(KERAS-BACKEND) $(KERAS-TAG) bash
+	$(DOCKER) run --rm -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset --env KERAS_BACKEND=$(KERAS-BACKEND) $(KERAS-TAG) bash
 
+# Specify that no actual files are created from these make commands
+.PHONY: build-caffe caffe build-keras keras

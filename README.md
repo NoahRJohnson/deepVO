@@ -19,13 +19,12 @@ Next, convert the KITTI image frames into optical flow images using FlowNet. Mak
 git submodule update --init
 ```
 
-Use the download script in flownet2/models/ to download pre-trained Caffe networks. This may take a while. Once that's done, build and run a Caffe image using the provided Makefile, which mounts your kitti data into the 'data/dataset' folder:
+Use the download script in flownet2/models/ to download pre-trained Caffe networks. This may take a while. Once that's done, build and run a Caffe image using the provided Makefile, which automatically mounts this repository and mounts your kitti data into the 'data' folder. Just modify the Makefile DATA variable to point to wherever your 'dataset' folder is.
 
 ```bash
 make caffe
 ```
 
-Just modify the Makefile DATA variable to point to wherever your 'dataset' folder is.
 
 
 ```bash
