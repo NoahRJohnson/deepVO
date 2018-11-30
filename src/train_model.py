@@ -2,6 +2,8 @@ import argparse
 import batcher 
 import keras as K
 import numpy as np
+
+from epoch import Epoch
 from time import time
 
 ap = argparse.ArgumentParser()
@@ -12,6 +14,7 @@ ap.add_argument('--beta', type=int, default=100, help='Weight on orientation los
 ap.add_argument('--hidden_dim', type=int, default=1000, help='Dimension of LSTM hidden state')
 ap.add_argument('--layer_num', type=int, default=2, help='How many LSTM layers to stack')
 ap.add_argument('--num_epochs', type=int, default=20, help='How many full passes to make over the training data')
+ap.add_argument('--step_size', type=int, default=1, help='How many optical flow samples to skip between subsequences.')
 ap.add_argument('--subseq_length', type=int, default=50, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
 ap.add_argument('--mode', default = 'train', help="train or test. Train produces model checkpoints, test outputs csvs of poses for each testing sequence.")
 #ap.add_argument('--weights', default='')
@@ -50,9 +53,24 @@ def custom_loss_with_beta(beta):
         return (L_x + beta * L_q)
     return weighted_mse 
 
-E = Epoch()
-num_features = E.get_num_features()
+# Separate the sequences for which there is ground truth into test 
+# and train according to the paper's partition. 
+#train_seqs = ['00', '02', '08', '09'] 
+train_seqs = ['00', '01', '02'] # until we finish generating
+test_seqs = ['03', '04', '05', '06', '07', '10']
 
+# Create a data loader to get batches one epoch at a time
+epoch_data_loader = Epoch(datadir=args['data_dir'],
+                          flowdir=os.path.join(args['data_dir'], "flows"),
+                          train_seq_nos=train_seqs,
+                          window_size=args['subseq_length'],
+                          step_size=args['step_size'],
+                          batch_size=args['batch_size'])
+
+# How long are the flattened flow images?
+num_features = epoch_data_loader.get_num_features()
+
+# Define Keras model architecture
 model = K.models.Sequential()
 
 # Stacked LSTM layers
@@ -62,45 +80,45 @@ for i in range(args['layer_num']):
                                                args['subseq_length'],
                                                num_features),
                             return_sequences=True))
-model.add(K.layers.TimeDistributed(K.layers.Dense(6, activation='linear')))  # pose values unbounded
+
+# A single dense layer to convert the LSTM output into
+# a pose estimate vector of length 6. We use a linear
+# activation because pose position values can be
+# unbounded.
+model.add(K.layers.TimeDistributed(K.layers.Dense(6, activation='linear')))
+
+# Compile the model, with custom loss function
 model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
 
+# #print-debugging lyfe
 print("Layers: {}".format(model.layers))
 
 # Create TensorBoard
 tensorboard = K.callbacks.TensorBoard(
     log_dir="logs/{}".format(time()))
+
 # Attach it to our model
 tensorboard.set_model(model)
-
-# Separate the sequences for which there is ground truth into test 
-# and train according to the paper's partition. 
-#train_seqs = ['00', '02', '08', '09'] 
-train_seqs = ['00', '01', '02'] # until we finish generating
-test_seqs = ['03', '04', '05', '06', '07', '10']
 
 if args['mode'] == 'train':
     for epoch in range(args['num_epochs']):
 
         losses = []
 
-        np.random.shuffle(train_seqs)  # randomize order of KITTI sequences
-        for kitti_seq in train_seqs:  # in one epoch, go through all of the data
-            # Load subsequences to train on
-            X, Y = batcher.get_samples(basedir=args['data_dir'],
-                                       seq=kitti_seq,
-                                       batch_size=1)
-            for i in range(len(X)):  # looping over samples
-                y_i = np.array([Y[i]])
+        while not epoch_data_loader.is_complete():
+            X, Y = epoch_data_loader.get_batch()
 
-                x_i = np.expand_dims(np.expand_dims(X[i], axis=1), axis=1)
-                
-                loss = model.train_on_batch(x_i, y_i)  # update weights
-                losses.append(loss)
+        for i in range(len(X)):  # looping over samples
+	    y_i = np.array([Y[i]])
 
-                print("TRAINING LOSS: {}".format(np.mean(losses)))
+	    x_i = np.expand_dims(np.expand_dims(X[i], axis=1), axis=1)
+	
+	    loss = model.train_on_batch(x_i, y_i)  # update weights
+	    losses.append(loss)
 
-            model.reset_states()  # clear LSTM hidden states between kitti sequences
+	    print("TRAINING LOSS: {}".format(np.mean(losses)))
+
+         model.reset_states()  # clear LSTM hidden states between kitti sequences
 
         # Calculate average loss of all samples this epoch
         mean_epoch_loss = np.mean(losses)

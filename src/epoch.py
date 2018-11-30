@@ -1,9 +1,9 @@
 """Generate batches for training.
 
 A batch consists of samples, where each sample is a sub-sequence. A sub-
-sequence contains batch_size frames. Ground truth for the subsequence is 
-modified so that translations and rotations are relative to the first 
-frame of the sub-sequence rather than the first frame of the full 
+sequence contains batch_size frames. Ground truth for the subsequence is
+modified so that translations and rotations are relative to the first
+frame of the sub-sequence rather than the first frame of the full
 sequence. Rotation matrices are converted to Euler angles.
 """
 
@@ -15,7 +15,6 @@ import random
 from numpy.linalg import inv
 from odometry import odometry
 from os.path import join
-from PIL import Image
 
 
 def is_rotation_matrix(r):
@@ -92,8 +91,40 @@ def process_poses(poses):
     rectified_poses = rectify_poses(poses)
     return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
+def read_flow(name):
+    """Open .flo file as np array.
 
-class Batcher():
+    Args:
+        name: string path to file
+
+    Returns:
+        Flat numpy array
+    """
+    # Open the file in binary format
+    f = open(name, 'rb')
+
+    # Read first 4 bytes of file, it should be a header
+    header = f.read(4)
+    if header.decode("utf-8") != 'PIEH':
+        raise Exception('Flow file header does not contain PIEH')
+
+    # Read width and height from file
+    width = np.fromfile(f, dtype=np.int32, count=1).squeeze()
+    height = np.fromfile(f, dtype=np.int32, count=1).squeeze()
+
+#    flow = np.fromfile(f, dtype=np.float32, count=width * height * 2)\
+#             .reshape((height, width, 2))\
+#             .astype(np.float32)
+
+    # Read optical flow data from file
+    flow = np.fromfile(f, dtype=np.float32, count=width * height * 2)\
+             .reshape((height * width * 2, ))\
+             .astype(np.float32)
+
+    return flow
+
+
+class Epoch():
     """Create batches of sub-sequences.
 
     Divide all train sequences into subsequences
@@ -129,73 +160,125 @@ class Batcher():
         self.window_size = window_size
         self.step_size = step_size
         self.batch_size = batch_size
-        self.partitions = []
 
+        # Calculate subsequence indices
         self.partition_sequences()
 
     def get_num_features(self):
+        """number of pixels in flow images"""
         pass  # TODO
 
     def is_complete(self):
-        """Stop serving batches if there are no more unused subsequences."""
-        if len(self.partitions) > 0:
-            return False
-        else:
+        """The epoch is done if we can't completely fill up
+        another batch."""
+        if len(self.partitions) < self.batch_size:
             return True
+        else:
+            return False
+
+    def reset(self):
+        """Call when an epoch is done, and you want to train
+        over another epoch."""
+        self.partition_sequences()
 
     def partition_sequences(self):
         """Partition training sequences into subsequences.
 
-        No data is actually loaded yet, but here we just figure out
-        the different subsequences which will act as the samples
-        for training.
+        Creates self.partitions, a list of
+        (sequence_number, start_index, end_index) tuples
+        where each tuple corresponds to a subsequence.
+
+        No data is actually loaded yet, we just figure out
+        the indices for the different subsequences which will
+        act as the samples for training.
 
         Subsequences are of length window_size, with starting indices
         staggered by step_size.
 
-        Returns:
+        The indices will be used later to actually load the
+        corresponding .flo images.
 
-        NOTE: The final subsequence may need to be padded to be the same
-              length as all the others, if the arithmetic doesn't work
-              out nicely. Also, self.step_size > self.window_size will
-              result in flow samples from the full sequence failing to
-              appear in the epoch.
+        NOTE:
+            The final subsequence may need to be padded to be the same
+            length as all the others, if the arithmetic doesn't work
+            out nicely. Also, self.step_size > self.window_size will
+            result in flow samples from the full sequence failing to
+            appear in the epoch.
         """
-        for seq_no in self.train_seq_nos:
-            len_seq = len(os.listdir(join(self.flowdir, seq_no)))
-            for window_start in range(1, len_seq - self.window_size + 1,
-                                      self.step_size):
-                window_end = window_start + self.window_size + 1
-                self.window_idxs.append((seq_no, (window_start, window_end)))
-        random.shuffle(self.window_idxs)
+        self.partitions = []
 
-    def get_sample(self, seq, start_idx):
+        # For every KITTI sequence
+        for seq_no in self.train_seq_nos:
+
+            # Get the length of that sequence
+            len_seq = len(os.listdir(join(self.flowdir, seq_no)))
+
+            # For every sliding window in that sequence
+            for window_start in range(0, len_seq - self.window_size + 1,
+                                      self.step_size):
+
+                # Don't give window bounds with upper bound greater than
+                # the number of actual frames in the sequence. Padding
+                # is handled in get_sample() for short final sub-sequence.
+                # End bounds are exclusive, to match range().
+                window_end = min(window_start + self.window_size, len_seq)
+
+                self.partitions.append((seq_no, window_start, window_end))
+
+        # Shuffle the training data
+        random.shuffle(self.partitions)
+
+    def get_sample(self, seq_no, start_idx, end_idx):
         """Loads one sample.
 
-        Create one window_size long subsequence.
+        Load a subsequence of optical flow images from
+        sequence seq_no, and the corresponding
+        subsequence of pose vectors.
+
+        Pads the ends with zeros if necessary to ensure
+        the subsequences are of length window_size.
 
         Args:
-            
-            start_idx: What index in the sequence to start from. (seq_no, (start_frame, end_frame + 1))
-
+            seq_no: string, KITTI sequence
+            start_idx: What index in the sequence to start from (inclusive)
+            end_idx: What index in the sequence to end at (exclusive). May
+                     be less than window_size away from start_idx, which
+                     will require padding.
         Returns:
-            (x, y):
+            A tuple (x, y):
                 x: A (window_size, HxWx3) array of flownet image pixels
-                y: A (window_size, 6) array of ground truth poses
+                y: A (window_size, 6) array of rectified ground truth poses
         """
-        seq, window_bounds = window_idx
-        seq_path = join(self.flowdir, seq)
-        frame_nos = range(*(window_bounds))
 
-        x = [np.array(Image.open(join(seq_path,
-                                 "{i}.flo".format(i=frame_no))))
-               .flatten()
+        # Path to flow folder for this sequence
+        flow_seq_path = join(self.flowdir, seq_no)
+
+        # The file names (w/o extension) to load
+        frame_nos = range(start_idx, end_idx)
+
+        # Load optical flow images
+        x = [read_flow(join(flow_seq_path,
+                            "{}.flo".format(frame_no)))
              for frame_no in frame_nos]
 
-        x = np.array(x)
+        # Load poses
+        raw_poses = odometry(self.datadir, seq_no, frames=frame_nos).poses
 
-        raw_poses = odometry(self.datadir, seq, frames=frame_nos).poses
+        # Convert to numpy arrays
+        x = np.array(x)
         y = process_poses(raw_poses)
+
+        # pad if necessary
+        if len(frame_nos) < self.window_size:
+            num_to_pad = self.window_size - len(frame_nos)
+            num_features = np.prod(x[0].shape)
+
+            for i in range(num_to_pad):
+                x = np.vstack(x, np.zeros(num_features))
+
+            for i in range(num_to_pad):
+                y = np.vstack(y, np.zeros(6))
+
         return (x, y)
 
     def get_batch(self):
@@ -206,16 +289,27 @@ class Batcher():
                 x: A (batch_size, window_size, HxWx3) np array of subsequences.
                 y: A (batch_size, window_size, HxWx3) np array of ground truth
                    pose vectors.
+
         NOTE: See __init__ docstring note about batch_size.
         """
+        if self.is_complete():
+            return None
+
         x = []
         y = []
         for sample in range(self.batch_size):
-            if not self.is_complete():
-                window_idx = self.window_idxs.pop()
-                sample_x, sample_y = self.get_sample(window_idx)
-                x.append(sample_x)
-                y.append(sample_y)
+	    # get and remove first element
+            window_start_idx, window_end_idx = self.partitions.pop()
+
+            # Load the sample
+            sample_x, sample_y = self.get_sample(window_idx)
+
+            # Add sample data and truth pose to batch
+	    x.append(sample_x)
+	    y.append(sample_y)
+
+        # Convert to numpy arrays
         x = np.array(x)
         y = np.array(y)
+
         return (x, y)
