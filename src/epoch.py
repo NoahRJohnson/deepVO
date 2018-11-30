@@ -178,7 +178,7 @@ class Epoch():
         self.min_flow_shape = self.compute_min_flow_shape()
 
     def compute_min_flow_shape(self):
-        min_shape = np.full((3,) fill_value=np.inf)
+        min_shape = np.full((3,), fill_value=np.inf)
 
         for seq_no in self.train_seq_nos:
             ex_path = join(self.flowdir, seq_no, "0.flo")
@@ -343,8 +343,8 @@ class Epoch():
                                                  window_end_idx)
 
             # Add sample data and truth pose to batch
-	    x.append(sample_x)
-	    y.append(sample_y)
+            x.append(sample_x)
+            y.append(sample_y)
 
         # Convert to numpy arrays
         x = np.array(x)
