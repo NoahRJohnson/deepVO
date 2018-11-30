@@ -193,7 +193,7 @@ class Epoch():
 
             min_shape = np.minimum(min_shape, ex_img.shape)
             min_shape = np.array([int(thing) for thing in min_shape])
-
+            print("################# min_shape: ", min_shape)
         return min_shape
 
     def get_num_features(self):
@@ -303,6 +303,8 @@ class Epoch():
         # Crop and flatten images into feature vectors
         x = [convert_flow_to_feature_vector(flow, self.min_flow_shape)
              for flow in x]
+
+        frame_nos = tuple(list(frame_nos).append(frame_nos[-1] + 1))
 
         # Load poses
         raw_poses = odometry(self.datadir, seq_no, frames=frame_nos).poses
