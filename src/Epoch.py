@@ -1,10 +1,10 @@
 """Generate batches for training.
 
-A batch is of size one, meaning one sub-sequence. A sub-sequence contains
-batch_size frames. Ground truth for the subsequence is modified so that
-translations and rotations are relative to the first frame of the sub-sequence
-rather than the first frame of the full sequence. Rotation matrices are
-converted to Euler angles.
+A batch consists of samples, where each sample is a sub-sequence. A sub-
+sequence contains batch_size frames. Ground truth for the subsequence is
+modified so that translations and rotations are relative to the first
+frame of the sub-sequence rather than the first frame of the full
+sequence. Rotation matrices are converted to Euler angles.
 """
 
 import math
@@ -15,7 +15,6 @@ import random
 from numpy.linalg import inv
 from odometry import odometry
 from os.path import join
-from PIL import Image
 
 
 def is_rotation_matrix(r):
@@ -132,9 +131,6 @@ def read_flow(name):
     Returns:
         Flat numpy array
     """
-    if name.endswith('.pfm') or name.endswith('.PFM'):
-        return readPFM(name)[0][:,:,0:2]
-
     f = open(name, 'rb')
 
     header = f.read(4)
@@ -144,9 +140,11 @@ def read_flow(name):
     width = np.fromfile(f, np.int32, 1).squeeze()
     height = np.fromfile(f, np.int32, 1).squeeze()
 
-    flow = np.fromfile(f, np.float32, width * height * 2).reshape((height, width, 2))
+    flow = np.fromfile(f, np.float32, width * height * 2)\
+             .reshape((height, width, 2))\
+             .astype(np.float32)
 
-return flow.astype(np.float32)
+    return flow
 
 
 class Epoch():
@@ -157,33 +155,34 @@ class Epoch():
     until all subsequences have been exhausted.
     """
 
-    def __init__(self, datadir, traindir, train_seq_nos,
-                 step_size, n_frames, batch_size):
+    def __init__(self, datadir, traindir, flowdir, train_seq_nos,
+                 window_size, step_size, batch_size):
         """Initialize.
 
         Args:
             datadir: The directory where the kitti `sequences` folder
                      is located.
-            traindir: The directory where the flownet images are
+            flowdir: The directory where the flownet images are
             train_seq_nos: list of strings corresponding to kitti
                            sequences in the training set
+            window_size: Number of flow images per window in sequence
+                         partitioning, i.e. subsequence length.
             step_size: int. Step size for sliding window in sequence
                        partitioning
-            n_frames: Number of frames per window in sequence
-                      partitioning.
             batch_size: Number of samples (subsequences) per batch.
                         Final batch may be smaller if batch_size is
                         greater than the number of subsequences remaining
                         when get_batch() is called.
         """
-        if step_size > n_frames:
-            print("WARNING: step_size greater than n_frames. "
+        if step_size > window_size:
+            print("WARNING: step_size greater than window size. "
                   "This will result in unseen sequence frames.")
+
         self.traindir = traindir
         self.datadir = datadir
         self.train_seq_nos = train_seq_nos
+        self.window_size = window_size
         self.step_size = step_size
-        self.n_frames = n_frames
         self.batch_size = batch_size
         self.window_idxs = []
 
@@ -199,49 +198,67 @@ class Epoch():
     def partition_sequences(self):
         """Partition a sequence into subsequences.
 
-        Create subsequences of length n_frames, with starting indices
+        Create subsequences of length window_size, with starting indices
         staggered by step_size.
 
         NOTES: This will NOT output a short, final subsequence if the
         arithmetic doesn't work out nicely. Doing so would screw up
         the dimensions everywhere unless the final subsequence was
-        zero-buffered to length n_frames, which could cause other issues.
-        ALSO: self.step_size > self.n_frames will result in frames from
+        zero-buffered to length window_size, which could cause other issues.
+        ALSO: self.step_size > self.window_size will result in frames from
         the full sequence failing to appear in the epoch.
         """
         for seq_no in self.train_seq_nos:
             len_seq = len(os.listdir(join(self.traindir, seq_no)))
-            for window_start in range(1, len_seq - self.n_frames + 1,
+            for window_start in range(1, len_seq - self.window_size + 1,
                                       self.step_size):
-                window_end = window_start + self.n_frames + 1
+
+                # Don't give window bounds with upper bound greater than
+                # the number of actual frames in the sequence. Buffering
+                # is handled in get_sample() for short final sub-sequence.
+                window_end = min(window_start + self.window_size + 1,
+                                 len_seq + 1)
                 self.window_idxs.append((seq_no, (window_start, window_end)))
         random.shuffle(self.window_idxs)
 
     def get_sample(self, window_idx):
         """Create one sample.
 
-        Create one n_frames long subsequence.
+        Create one window_size long subsequence.
 
         Args:
             windox_idx: (seq_no, (start_frame, end_frame + 1))
 
         Returns:
             (x, y):
-                x: An (n_frames, HxWx3) array of flownet image pixels
-                y: An (n_frames, 6) array of ground truth poses
+                x: A (window_size, HxWx3) array of flownet image pixels
+                y: A (window_size, 6) array of ground truth poses
         """
+        buff = False
         seq, window_bounds = window_idx
+
         seq_path = join(self.traindir, seq)
         frame_nos = range(*(window_bounds))
+        if len(frame_nos) < self.window_size:
+            missing_frames = range(self.window_size - len(frame_nos))
+            buff = True
 
         x = [read_flow(join(seq_path,
                             "{i}.flo".format(i=frame_no)))
              for frame_no in frame_nos]
 
+        if buff:
+            img_size = x[0].shape
+            x = x + [np.zeros(img_size) for i in missing_frames]
+
         x = np.array(x)
 
         raw_poses = odometry(self.datadir, seq, frames=frame_nos).poses
         y = process_poses(raw_poses)
+
+        if buff:
+            for i in missing_frames:
+                y = np.vstack(y, np.zeros(6))
         return (x, y)
 
     def get_batch(self):
@@ -249,8 +266,8 @@ class Epoch():
 
         Returns:
             (x, y):
-                x: A (batch_size, n_frames, HxWx3) np array of subsequences.
-                y: A (batch_size, n_frames, HxWx3) np array of ground truth
+                x: A (batch_size, window_size, HxWx3) np array of subsequences.
+                y: A (batch_size, window_size, HxWx3) np array of ground truth
                    pose vectors.
         NOTE: See __init__ docstring note about batch_size.
         """

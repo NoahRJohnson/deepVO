@@ -3,27 +3,27 @@ help:
 
 DATA?="/media/gpudata_backup/kitti/dataset/"
 GPU?=0
-KERAS_DOCKER_FILE=docker/Dockerfile
-CAFFE_DOCKER_FILE=flownet2/docker/standalone/gpu/Dockerfile
+KERAS-DOCKER-FILE=docker/keras_dockerfile
+CAFFE-DOCKER-FILE=docker/caffe_dockerfile
 DOCKER=GPU=$(GPU) nvidia-docker
-BACKEND=tensorflow
-PYTHON_VERSION?=3.6
-CUDA_VERSION?=9.0
-CUDNN_VERSION?=7
-TEST=tests/
+NULL-BUILD-CONTEXT="docker/"
+FLOWNET-BUILD-CONTEXT="flownet2/"
+KERAS-BACKEND=tensorflow
 SRC=$(shell pwd)
-CAFFE-TAG="caffe:gpu"
+CAFFE-TAG="caffe-flownet"
 KERAS-TAG="keras"
 
 build-caffe:
-	docker build -t $(CAFFE-TAG) -f $(CAFFE_DOCKER_FILE) docker/
+	docker build -t $(CAFFE-TAG) -f $(CAFFE-DOCKER-FILE) $(FLOWNET-BUILD-CONTEXT)
 
 build-keras:
-	docker build -t $(KERAS-TAG) --build-arg python_version=$(PYTHON_VERSION) --build-arg cuda_version=$(CUDA_VERSION) --build-arg cudnn_version=$(CUDNN_VERSION) -f $(KERAS_DOCKER_FILE) docker/
+	docker build -t $(KERAS-TAG) -f $(KERAS-DOCKER-FILE) $(NULL-BUILD-CONTEXT)
 
-caffe: build-caffe
+caffe:
 	$(DOCKER) run -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset $(CAFFE-TAG) bash
 
-keras: build-keras
-	$(DOCKER) run -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset --env KERAS_BACKEND=$(BACKEND) $(KERAS-TAG) bash
+keras:
+	$(DOCKER) run --rm -it -v $(SRC):/workspace -v $(DATA):/workspace/data/dataset --env KERAS_BACKEND=$(KERAS-BACKEND) $(KERAS-TAG) bash
 
+# Specify that no actual files are created from these make commands
+.PHONY: build-caffe caffe build-keras keras
