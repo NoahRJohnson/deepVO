@@ -132,7 +132,7 @@ elif args['mode'] == 'test':
         # Open output file to write pose results to
         out_f = open('test_results/{}.csv'.format(kitti_seq))
 
-        test_data_loader = 
+        test_data_loader = Epoch()
 
         losses = []
         while not epoch_data_loader.is_complete():
