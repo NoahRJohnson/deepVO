@@ -112,19 +112,15 @@ def read_flow(name):
     width = np.fromfile(f, dtype=np.int32, count=1).squeeze()
     height = np.fromfile(f, dtype=np.int32, count=1).squeeze()
 
-#    flow = np.fromfile(f, dtype=np.float32, count=width * height * 2)\
-#             .reshape((height, width, 2))\
-#             .astype(np.float32)
-
     # Read optical flow data from file
     flow = np.fromfile(f, dtype=np.float32, count=width * height * 2)\
-             .reshape((height * width * 2, ))\
+             .reshape((height, width, 2))\
              .astype(np.float32)
 
     return flow
 
 def convert_flow_to_feature_vector(flow, crop_shape):
-    """"""
+    """Crop the center, and flatten"""
 
     # Crop image from center based on minimum size
     # https://stackoverflow.com/a/50322574
@@ -133,6 +129,7 @@ def convert_flow_to_feature_vector(flow, crop_shape):
     slices = tuple(map(slice, start, end))
     crop = img[slices]
 
+    # Flatten image to 1-D feature vector
     return crop.flatten()
 
 
@@ -174,18 +171,26 @@ class Epoch():
         self.batch_size = batch_size
 
         # Calculate subsequence indices
-        self.partition_sequences()
+        self.partitions = self.partition_sequences()
 
         # Compute minimum flow image size (they can differ)
         # We'll use these dimensions to crop all flow images
-        self.compute_min_flow_shape()
+        self.min_flow_shape = self.compute_min_flow_shape()
 
     def compute_min_flow_shape(self):
+        min_shape = np.full((3,) fill_value=np.inf)
+
         for seq_no in self.train_seq_nos:
             ex_path = join(self.flowdir, seq_no, "0.flo")
 
-            ex_img = read_flow(ex_path)
-            join(flow_seq_path, "0.flo")
+            try:
+                ex_img = read_flow(ex_path)
+            except FileNotFoundError:
+                continue
+
+            min_shape = np.minimum(min_shape, ex_img.shape)
+
+        return min_shape
 
     def get_num_features(self):
         """number of pixels in flow images"""
@@ -202,14 +207,10 @@ class Epoch():
     def reset(self):
         """Call when an epoch is done, and you want to train
         over another epoch."""
-        self.partition_sequences()
+        self.partitions = self.partition_sequences()
 
     def partition_sequences(self):
         """Partition training sequences into subsequences.
-
-        Creates self.partitions, a list of
-        (sequence_number, start_index, end_index) tuples
-        where each tuple corresponds to a subsequence.
 
         No data is actually loaded yet, we just figure out
         the indices for the different subsequences which will
@@ -220,6 +221,11 @@ class Epoch():
 
         The indices will be used later to actually load the
         corresponding .flo images.
+
+        Returns:
+            A list of (sequence_number, start_index, end_index) tuples
+            where each tuple corresponds to a subsequence. start_index
+            is inclusive, and end_index is exclusive.
 
         NOTE:
             The final subsequence may need to be padded to be the same
@@ -279,10 +285,14 @@ class Epoch():
         # The file names (w/o extension) to load
         frame_nos = range(start_idx, end_idx)
 
-        # Load optical flow images
+        # Load raw optical flow images
         x = [read_flow(join(flow_seq_path,
                             "{}.flo".format(frame_no)))
              for frame_no in frame_nos]
+
+        # Crop and flatten images into feature vectors
+        x = [convert_flow_to_feature_vector(flow, self.min_flow_shape)
+             for flow in x]
 
         # Load poses
         raw_poses = odometry(self.datadir, seq_no, frames=frame_nos).poses
