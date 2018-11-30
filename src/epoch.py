@@ -265,6 +265,7 @@ class Epoch():
 
         # Shuffle the training data
         random.shuffle(partitions)
+
         return partitions
 
     def get_sample(self, seq_no, start_idx, end_idx):

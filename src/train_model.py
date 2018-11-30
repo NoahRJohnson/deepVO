@@ -63,6 +63,7 @@ test_seqs = ['03', '04', '05', '06', '07', '10']
 epoch_data_loader = Epoch(datadir=args['data_dir'],
                           flowdir=os.path.join(args['data_dir'], "flows"),
                           train_seq_nos=train_seqs,
+                          test_seq_nos=test_seqs,
                           window_size=args['subseq_length'],
                           step_size=args['step_size'],
                           batch_size=args['batch_size'])
@@ -108,17 +109,13 @@ if args['mode'] == 'train':
         while not epoch_data_loader.is_complete():
             X, Y = epoch_data_loader.get_batch()
 
-        for i in range(len(X)):  # looping over samples
-	    y_i = np.array([Y[i]])
-
-	    x_i = np.expand_dims(np.expand_dims(X[i], axis=1), axis=1)
-	
 	    loss = model.train_on_batch(x_i, y_i)  # update weights
 	    losses.append(loss)
 
 	    print("TRAINING LOSS: {}".format(np.mean(losses)))
 
-         model.reset_states()  # clear LSTM hidden states between kitti sequences
+        # Re partition and shuffle
+        epoch_data_loader.reset()
 
         # Calculate average loss of all samples this epoch
         mean_epoch_loss = np.mean(losses)
@@ -129,11 +126,25 @@ if args['mode'] == 'train':
     tensorboard.on_train_end(None)
 
 elif args['mode'] == 'test':
-    losses = []
+#  TODO
     for kitti_seq in test_seqs:
 
         # Open output file to write pose results to
         out_f = open('test_results/{}.csv'.format(kitti_seq))
+
+        test_data_loader = Epoch()
+
+        losses = []
+        while not epoch_data_loader.is_complete():
+            X, Y = epoch_data_loader.get_batch()
+
+            loss = model.train_on_batch(x_i, y_i)  # update weights
+            losses.append(loss)
+
+            print("TRAINING LOSS: {}".format(np.mean(losses)))
+
+        # Re partition and shuffle
+        epoch_data_loader.reset()
 
         # Load subsequences to train on
         X, Y = batcher.get_samples(basedir=args['data_dir'],
@@ -152,7 +163,6 @@ elif args['mode'] == 'test':
             model.test_on_batch(x_i, y_i)  # get testing loss
             losses.append(loss)
 
-        model.reset_states()  # clear LSTM hidden states between kitti sequences
 
         # Clean up I/O
         out_f.close()
@@ -165,12 +175,4 @@ elif args['mode'] == 'test':
 
 else:
     print("ERROR: Mode {} not recognized".format(args['mode']))
-
-"""model.fit(X, Y,
-                      batch_size=args['batch_size'],
-                      shuffle=False,  # stateful model, so order of subsequences matter
-                      verbose=1,
-                      nb_epoch=1,
-                      callbacks=[tensorboard])"""
-
 
