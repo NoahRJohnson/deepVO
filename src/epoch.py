@@ -11,6 +11,7 @@ import math
 import numpy as np
 import os
 import random
+import operator
 
 from numpy.linalg import inv
 from odometry import odometry
@@ -125,7 +126,7 @@ def convert_flow_to_feature_vector(flow, crop_shape):
     """Crop the center, and flatten."""
     # Crop image from center based on minimum size
     # https://stackoverflow.com/a/50322574
-    start = tuple(map(lambda a, da: a // 2 - da // 2, flow.shape, crop_shape))
+    start = tuple(map(lambda a, da: int(a // 2) - int(da // 2), flow.shape, crop_shape))
     end = tuple(map(operator.add, start, crop_shape))
     slices = tuple(map(slice, start, end))
     crop = flow[slices]
@@ -191,6 +192,7 @@ class Epoch():
                 continue
 
             min_shape = np.minimum(min_shape, ex_img.shape)
+            min_shape = np.array([int(thing) for thing in min_shape])
 
         return min_shape
 
@@ -242,7 +244,7 @@ class Epoch():
             result in flow samples from the full sequence failing to
             appear in the epoch.
         """
-        self.partitions = []
+        partitions = []
 
         # For every KITTI sequence
         for seq_no in self.train_seq_nos:
@@ -259,11 +261,11 @@ class Epoch():
                 # is handled in get_sample() for short final sub-sequence.
                 # End bounds are exclusive, to match range().
                 window_end = min(window_start + self.window_size, len_seq)
-
-                self.partitions.append((seq_no, window_start, window_end))
+                partitions.append((seq_no, window_start, window_end))
 
         # Shuffle the training data
-        random.shuffle(self.partitions)
+        random.shuffle(partitions)
+        return partitions
 
     def get_sample(self, seq_no, start_idx, end_idx):
         """Load one sample.
