@@ -2,7 +2,7 @@ import argparse
 import batcher 
 import keras as K
 import numpy as np
-
+import os
 from epoch import Epoch
 from time import time
 
@@ -63,7 +63,7 @@ test_seqs = ['03', '04', '05', '06', '07', '10']
 epoch_data_loader = Epoch(datadir=args['data_dir'],
                           flowdir=os.path.join(args['data_dir'], "flows"),
                           train_seq_nos=train_seqs,
-                          test_seq_nos=test_seqs,
+                          #test_seq_nos=test_seqs, #epoch doesn't take this as an argument in epoch.py
                           window_size=args['subseq_length'],
                           step_size=args['step_size'],
                           batch_size=args['batch_size'])
@@ -79,7 +79,7 @@ for i in range(args['layer_num']):
     model.add(K.layers.LSTM(args['hidden_dim'],
                             batch_input_shape=(args['batch_size'],
                                                args['subseq_length'],
-                                               num_features),
+                                              int( num_features)),
                             return_sequences=True))
 
 # A single dense layer to convert the LSTM output into
@@ -108,11 +108,9 @@ if args['mode'] == 'train':
 
         while not epoch_data_loader.is_complete():
             X, Y = epoch_data_loader.get_batch()
-
-	    loss = model.train_on_batch(x_i, y_i)  # update weights
-	    losses.append(loss)
-
-	    print("TRAINING LOSS: {}".format(np.mean(losses)))
+            loss = model.train_on_batch(x_i, y_i)  # update weights
+            losses.append(loss)
+            print("TRAINING LOSS: {}".format(np.mean(losses)))
 
         # Re partition and shuffle
         epoch_data_loader.reset()
