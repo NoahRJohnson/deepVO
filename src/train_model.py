@@ -2,7 +2,6 @@ import argparse
 import batcher 
 import keras as K
 import numpy as np
-
 from time import time
 
 ap = argparse.ArgumentParser()

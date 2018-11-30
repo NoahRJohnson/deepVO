@@ -155,7 +155,7 @@ class Epoch():
     until all subsequences have been exhausted.
     """
 
-    def __init__(self, datadir, traindir, flowdir, train_seq_nos,
+    def __init__(self, datadir, flowdir, train_seq_nos,
                  window_size, step_size, batch_size):
         """Initialize.
 
@@ -178,8 +178,8 @@ class Epoch():
             print("WARNING: step_size greater than window size. "
                   "This will result in unseen sequence frames.")
 
-        self.traindir = traindir
         self.datadir = datadir
+        self.flowdir = flowdir
         self.train_seq_nos = train_seq_nos
         self.window_size = window_size
         self.step_size = step_size
@@ -201,15 +201,15 @@ class Epoch():
         Create subsequences of length window_size, with starting indices
         staggered by step_size.
 
-        NOTES: This will NOT output a short, final subsequence if the
-        arithmetic doesn't work out nicely. Doing so would screw up
-        the dimensions everywhere unless the final subsequence was
-        zero-buffered to length window_size, which could cause other issues.
-        ALSO: self.step_size > self.window_size will result in frames from
-        the full sequence failing to appear in the epoch.
+        NOTE: The final subsequence may need to be padded to be the same
+              length as all the others, if the arithmetic doesn't work
+              out nicely.
+        ALSO: self.step_size > self.window_size will result in flow
+              samples from the full sequence failing to appear in
+              the epoch.
         """
         for seq_no in self.train_seq_nos:
-            len_seq = len(os.listdir(join(self.traindir, seq_no)))
+            len_seq = len(os.listdir(join(self.flowdir, seq_no)))
             for window_start in range(1, len_seq - self.window_size + 1,
                                       self.step_size):
 
@@ -237,7 +237,8 @@ class Epoch():
         buff = False
         seq, window_bounds = window_idx
 
-        seq_path = join(self.traindir, seq)
+        seq_path = join(self.flowdir, seq)
+
         frame_nos = range(*(window_bounds))
         if len(frame_nos) < self.window_size:
             missing_frames = range(self.window_size - len(frame_nos))
