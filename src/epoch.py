@@ -13,7 +13,6 @@ import os
 import random
 import operator
 
-from odometry import odometry
 from os.path import join
 
 
