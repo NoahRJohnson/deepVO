@@ -123,6 +123,18 @@ def read_flow(name):
 
     return flow
 
+def convert_flow_to_feature_vector(flow, crop_shape):
+    """"""
+
+    # Crop image from center based on minimum size
+    # https://stackoverflow.com/a/50322574
+    start = tuple(map(lambda a, da: a//2-da//2, flow.shape, crop_shape))
+    end = tuple(map(operator.add, start, crop_shape))
+    slices = tuple(map(slice, start, end))
+    crop = img[slices]
+
+    return crop.flatten()
+
 
 class Epoch():
     """Create batches of sub-sequences.
@@ -164,9 +176,20 @@ class Epoch():
         # Calculate subsequence indices
         self.partition_sequences()
 
+        # Compute minimum flow image size (they can differ)
+        # We'll use these dimensions to crop all flow images
+        self.compute_min_flow_shape()
+
+    def compute_min_flow_shape(self):
+        for seq_no in self.train_seq_nos:
+            ex_path = join(self.flowdir, seq_no, "0.flo")
+
+            ex_img = read_flow(ex_path)
+            join(flow_seq_path, "0.flo")
+
     def get_num_features(self):
         """number of pixels in flow images"""
-        pass  # TODO
+        return np.prod(self.min_flow_shape)
 
     def is_complete(self):
         """The epoch is done if we can't completely fill up
@@ -298,11 +321,16 @@ class Epoch():
         x = []
         y = []
         for sample in range(self.batch_size):
-	    # get and remove first element
-            window_start_idx, window_end_idx = self.partitions.pop()
+
+            # get and remove first element
+            seq_no, \
+            window_start_idx, \
+            window_end_idx = self.partitions.pop()
 
             # Load the sample
-            sample_x, sample_y = self.get_sample(window_idx)
+            sample_x, sample_y = self.get_sample(seq_no,
+                                                 window_start_idx,
+                                                 window_end_idx)
 
             # Add sample data and truth pose to batch
 	    x.append(sample_x)
