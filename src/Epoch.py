@@ -93,12 +93,11 @@ def process_poses(poses):
     return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
 
-class Epoch():
+class Batcher():
     """Create batches of sub-sequences.
 
     Divide all train sequences into subsequences
-    and yield batches of subsequences without repetition
-    until all subsequences have been exhausted.
+    and yield batches of subsequences without repetition.
     """
 
     def __init__(self, datadir, flowdir, train_seq_nos,
@@ -130,29 +129,37 @@ class Epoch():
         self.window_size = window_size
         self.step_size = step_size
         self.batch_size = batch_size
-        self.window_idxs = []
+        self.partitions = []
 
         self.partition_sequences()
 
+    def get_num_features(self):
+        pass  # TODO
+
     def is_complete(self):
         """Stop serving batches if there are no more unused subsequences."""
-        if len(self.window_idxs) > 0:
+        if len(self.partitions) > 0:
             return False
         else:
             return True
 
     def partition_sequences(self):
-        """Partition a sequence into subsequences.
+        """Partition training sequences into subsequences.
 
-        Create subsequences of length window_size, with starting indices
+        No data is actually loaded yet, but here we just figure out
+        the different subsequences which will act as the samples
+        for training.
+
+        Subsequences are of length window_size, with starting indices
         staggered by step_size.
+
+        Returns:
 
         NOTE: The final subsequence may need to be padded to be the same
               length as all the others, if the arithmetic doesn't work
-              out nicely.
-        ALSO: self.step_size > self.window_size will result in flow
-              samples from the full sequence failing to appear in 
-              the epoch.
+              out nicely. Also, self.step_size > self.window_size will
+              result in flow samples from the full sequence failing to
+              appear in the epoch.
         """
         for seq_no in self.train_seq_nos:
             len_seq = len(os.listdir(join(self.flowdir, seq_no)))
@@ -162,13 +169,14 @@ class Epoch():
                 self.window_idxs.append((seq_no, (window_start, window_end)))
         random.shuffle(self.window_idxs)
 
-    def get_sample(self, window_idx):
-        """Create one sample.
+    def get_sample(self, seq, start_idx):
+        """Loads one sample.
 
         Create one window_size long subsequence.
 
         Args:
-            windox_idx: (seq_no, (start_frame, end_frame + 1))
+            
+            start_idx: What index in the sequence to start from. (seq_no, (start_frame, end_frame + 1))
 
         Returns:
             (x, y):
