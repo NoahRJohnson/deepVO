@@ -140,7 +140,7 @@ def convert_flow_to_feature_vector(flow, crop_shape):
     crop = flow[slices]
 
     # Flatten image to 1-D feature vector
-    return crop.flatten()
+    return crop
 
 
 class Epoch():
