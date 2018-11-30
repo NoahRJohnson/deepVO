@@ -91,6 +91,7 @@ def process_poses(poses):
     rectified_poses = rectify_poses(poses)
     return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
+
 def read_flow(name):
     """Open .flo file as np array.
 
@@ -119,15 +120,15 @@ def read_flow(name):
 
     return flow
 
-def convert_flow_to_feature_vector(flow, crop_shape):
-    """Crop the center, and flatten"""
 
+def convert_flow_to_feature_vector(flow, crop_shape):
+    """Crop the center, and flatten."""
     # Crop image from center based on minimum size
     # https://stackoverflow.com/a/50322574
-    start = tuple(map(lambda a, da: a//2-da//2, flow.shape, crop_shape))
+    start = tuple(map(lambda a, da: a // 2 - da // 2, flow.shape, crop_shape))
     end = tuple(map(operator.add, start, crop_shape))
     slices = tuple(map(slice, start, end))
-    crop = img[slices]
+    crop = flow[slices]
 
     # Flatten image to 1-D feature vector
     return crop.flatten()
@@ -178,7 +179,8 @@ class Epoch():
         self.min_flow_shape = self.compute_min_flow_shape()
 
     def compute_min_flow_shape(self):
-        min_shape = np.full((3,) fill_value=np.inf)
+        """Compute minimum dimension of .flo images across sequences."""
+        min_shape = np.full((3,), fill_value=np.inf)
 
         for seq_no in self.train_seq_nos:
             ex_path = join(self.flowdir, seq_no, "0.flo")
@@ -193,20 +195,26 @@ class Epoch():
         return min_shape
 
     def get_num_features(self):
-        """number of pixels in flow images"""
+        """Number of pixels in flow images."""
         return np.prod(self.min_flow_shape)
 
     def is_complete(self):
-        """The epoch is done if we can't completely fill up
-        another batch."""
+        """Check if epoch is complete.
+
+        The epoch is done if we can't completely fill up
+        another batch.
+        """
         if len(self.partitions) < self.batch_size:
             return True
         else:
             return False
 
     def reset(self):
-        """Call when an epoch is done, and you want to train
-        over another epoch."""
+        """Reset the Epoch instance.
+
+        Call when an epoch is done, and you want to train
+        over another epoch.
+        """
         self.partitions = self.partition_sequences()
 
     def partition_sequences(self):
@@ -260,7 +268,7 @@ class Epoch():
         return partitions
 
     def get_sample(self, seq_no, start_idx, end_idx):
-        """Loads one sample.
+        """Load one sample.
 
         Load a subsequence of optical flow images from
         sequence seq_no, and the corresponding
@@ -280,7 +288,6 @@ class Epoch():
                 x: A (window_size, HxWx3) array of flownet image pixels
                 y: A (window_size, 6) array of rectified ground truth poses
         """
-
         # Path to flow folder for this sequence
         flow_seq_path = join(self.flowdir, seq_no)
 
@@ -335,9 +342,8 @@ class Epoch():
         for sample in range(self.batch_size):
 
             # get and remove first element
-            seq_no, \
-            window_start_idx, \
-            window_end_idx = self.partitions.pop()
+            window_idx = self.partitions.pop()
+            seq_no, window_start_idx, window_end_idx = window_idx
 
             # Load the sample
             sample_x, sample_y = self.get_sample(seq_no,
@@ -345,8 +351,8 @@ class Epoch():
                                                  window_end_idx)
 
             # Add sample data and truth pose to batch
-	    x.append(sample_x)
-	    y.append(sample_y)
+            x.append(sample_x)
+            y.append(sample_y)
 
         # Convert to numpy arrays
         x = np.array(x)
