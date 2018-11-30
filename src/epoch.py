@@ -234,7 +234,7 @@ class Epoch():
             result in flow samples from the full sequence failing to
             appear in the epoch.
         """
-        self.partitions = []
+        partitions = []
 
         # For every KITTI sequence
         for seq_no in self.train_seq_nos:
@@ -252,10 +252,12 @@ class Epoch():
                 # End bounds are exclusive, to match range().
                 window_end = min(window_start + self.window_size, len_seq)
 
-                self.partitions.append((seq_no, window_start, window_end))
+                partitions.append((seq_no, window_start, window_end))
 
         # Shuffle the training data
-        random.shuffle(self.partitions)
+        random.shuffle(partitions)
+
+        return partitions
 
     def get_sample(self, seq_no, start_idx, end_idx):
         """Loads one sample.
