@@ -53,6 +53,6 @@ for seq_path in "$SEQUENCES_FOLDER"/*/ ; do
         FLO="$FLOW_FOLDER/$i".flo
 
         # And write out a "x.png y.png z.flo" line
-        echo -e "$IMAGE1 $IMAGE2 $FLO\n" >> "$OUT_FILE"
+        echo "$IMAGE1 $IMAGE2 $FLO" >> "$OUT_FILE"
     done
 done
