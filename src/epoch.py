@@ -94,9 +94,9 @@ def mat_to_pose_vector(pose):
                           pose[:3, 3]))
 
 
-def process_poses(poses):
+def process_poses(reference_pose, poses):
     """Fully convert subsequence of poses."""
-    rectified_poses = rectify_poses(poses)
+    rectified_poses = rectify_poses(reference_pose, poses)
     return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
 
