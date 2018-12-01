@@ -44,19 +44,27 @@ def custom_loss_with_beta(beta):
             L_q is the orientation loss,
             and beta is a hyperparameter
         """
-        p_true = K.backend.gather(y_true, (0,1,2))
-        p_pred = K.backend.gather(y_pred, (0,1,2))
-        q_true = K.backend.gather(y_true, (3,4,5))
-        q_pred = K.backend.gather(y_pred, (3,4,5))
+        #p_true = K.backend.gather(y_true, (0,1,2))
+        #p_pred = K.backend.gather(y_pred, (0,1,2))
+        #q_true = K.backend.gather(y_true, (3,4,5))
+        #q_pred = K.backend.gather(y_pred, (3,4,5))
         #L_x = K.losses.mean_squared_error(p_true, p_pred)
         #L_q = K.losses.mean_squared_error(q_true, q_pred)
-        L_x = K.backend.mean(K.backend.square(p_pred - p_true), axis=-1)
-        L_q = K.backend.mean(K.backend.square(q_pred - q_true), axis=-1)
+        #L_x = K.backend.mean(K.backend.square(p_pred - p_true), axis=-1)
+        #L_q = K.backend.mean(K.backend.square(q_pred - q_true), axis=-1)
 
-        #wy_pred = K.dot(y_pred, K.variable(np.array([1,1,1, b, b, b])))
-        #wy_true = K.dot(y_true, K.variable(np.array([1,1,1, b, b, b])))
+        # Take the difference of each pose label and its estimate,
+        # and square that element-wise
+        squared_diff = K.backend.square(y_pred - y_true)
 
-        return (L_x + beta * L_q)
+        # Multiply the orientations by beta squared, and sum
+        # each tensor up
+        beta_sq = beta*beta
+        weights = K.backend.variable(np.array([1,1,1,beta_sq,beta_sq,beta_sq]))
+        loss = K.backend.squeeze(K.backend.dot(squared_diff, K.backend.expand_dims(weights)), axis=-1)
+        #loss = K.backend.dot(squared_diff, weights)
+
+        return loss
     return weighted_mse 
 
 # Separate the sequences for which there is ground truth into test 
@@ -111,8 +119,8 @@ model.add(TimeDistributed(Dense(6)))
 
 
 # Compile the model, with custom loss function
-#model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
-model.compile(loss = "mse", optimizer = "adam")
+model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
+#model.compile(loss = "mse", optimizer = "adam")
 
 # #print-debugging lyfe
 print("Model summary:")
@@ -126,7 +134,9 @@ tensorboard = K.callbacks.TensorBoard(
 # Attach it to our model
 tensorboard.set_model(model)
 
-
+# Set where weights are saved and loaded from
+weights_path = os.path.join(args['weights_dir'],
+			    'weights.h5')
 
 if args['mode'] == 'train':
     for epoch in range(args['num_epochs']):
@@ -152,8 +162,6 @@ if args['mode'] == 'train':
         tensorboard.on_epoch_end(epoch, dict(training_loss=mean_epoch_loss))
 
     # Once we're done with training, save the weights
-    weights_path = os.path.join(args['weights_dir'],
-                                'weights.h5')
     print("TRAINING FINISHED. SAVING WEIGHTS TO {}".format(weights_path))
     model.save_weights(weights_path)
 
@@ -161,6 +169,9 @@ if args['mode'] == 'train':
     tensorboard.on_train_end(None)
 
 elif args['mode'] == 'test':
+
+    # Load model parameter weights from training
+    model.load_weights(weights_path)
 
     for kitti_seq in test_seqs:
 
