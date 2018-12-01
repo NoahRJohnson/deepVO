@@ -1,21 +1,27 @@
 import argparse
-import batcher 
 import keras as K
 import numpy as np
-
+import os
 from epoch import Epoch
 from time import time
+from keras.models import Sequential
+from keras.layers import Dense, Activation, MaxPooling2D, Dropout, LSTM, Flatten, merge, TimeDistributed
+import numpy as np
+
+from keras.layers import Concatenate
+
+from keras.layers.convolutional import Conv2D
 
 ap = argparse.ArgumentParser()
 
 ap.add_argument('data_dir', type=str, help='Where KITTI data is stored')
-ap.add_argument('--batch_size', type=int, default=50)
+ap.add_argument('--batch_size', type=int, default=5)
 ap.add_argument('--beta', type=int, default=100, help='Weight on orientation loss')
-ap.add_argument('--hidden_dim', type=int, default=1000, help='Dimension of LSTM hidden state')
-ap.add_argument('--layer_num', type=int, default=2, help='How many LSTM layers to stack')
-ap.add_argument('--num_epochs', type=int, default=20, help='How many full passes to make over the training data')
+ap.add_argument('--hidden_dim', type=int, default=10, help='Dimension of LSTM hidden state')
+ap.add_argument('--layer_num', type=int, default=1, help='How many LSTM layers to stack')
+ap.add_argument('--num_epochs', type=int, default=5, help='How many full passes to make over the training data')
 ap.add_argument('--step_size', type=int, default=1, help='How many optical flow samples to skip between subsequences.')
-ap.add_argument('--subseq_length', type=int, default=50, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
+ap.add_argument('--subseq_length', type=int, default=5, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
 ap.add_argument('--mode', default = 'train', help="train or test. Train produces model checkpoints, test outputs csvs of poses for each testing sequence.")
 #ap.add_argument('--weights', default='')
 
@@ -63,7 +69,7 @@ test_seqs = ['03', '04', '05', '06', '07', '10']
 epoch_data_loader = Epoch(datadir=args['data_dir'],
                           flowdir=os.path.join(args['data_dir'], "flows"),
                           train_seq_nos=train_seqs,
-                          test_seq_nos=test_seqs,
+                          #test_seq_nos=test_seqs, #epoch doesn't take this as an argument in epoch.py
                           window_size=args['subseq_length'],
                           step_size=args['step_size'],
                           batch_size=args['batch_size'])
@@ -75,22 +81,41 @@ num_features = epoch_data_loader.get_num_features()
 model = K.models.Sequential()
 
 # Stacked LSTM layers
-for i in range(args['layer_num']):
+"""for i in range(args['layer_num']):
     model.add(K.layers.LSTM(args['hidden_dim'],
                             batch_input_shape=(args['batch_size'],
                                                args['subseq_length'],
-                                               num_features),
+                                              int( num_features)),
                             return_sequences=True))
-
+"""
 # A single dense layer to convert the LSTM output into
 # a pose estimate vector of length 6. We use a linear
 # activation because pose position values can be
 # unbounded.
-model.add(K.layers.TimeDistributed(K.layers.Dense(6, activation='linear')))
+#model.add(K.layers.LSTM(args['hidden_dim'], input_shape = (args['subseq_length'], int(num_features))))
+#model.add(K.layers.TimeDistributed(K.layers.Dense(6, ativation='linear')))
+
+sequence_lengths = args["subseq_length"]
+
+
+model=Sequential()
+model.add(TimeDistributed(Conv2D(10,(3,3)), input_shape=(sequence_lengths, 376, 1241, 2)))
+model.add(Activation('relu'))
+model.add(TimeDistributed(MaxPooling2D(data_format="channels_first", pool_size=(7, 7))))
+
+model.add(TimeDistributed(Conv2D(10,(3,3))))
+model.add(Activation('relu'))
+model.add(TimeDistributed(MaxPooling2D(data_format="channels_first", pool_size=(5, 5))))
+
+model.add(TimeDistributed(Flatten()))
+model.add(LSTM(240, return_sequences=True))
+model.add(TimeDistributed(Dense(6)))
+
+
 
 # Compile the model, with custom loss function
-model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
-
+#model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
+model.compile(loss = "mse", optimizer = "adam")
 # #print-debugging lyfe
 print("Layers: {}".format(model.layers))
 
@@ -101,6 +126,8 @@ tensorboard = K.callbacks.TensorBoard(
 # Attach it to our model
 tensorboard.set_model(model)
 
+
+
 if args['mode'] == 'train':
     for epoch in range(args['num_epochs']):
 
@@ -108,11 +135,9 @@ if args['mode'] == 'train':
 
         while not epoch_data_loader.is_complete():
             X, Y = epoch_data_loader.get_batch()
-
-	    loss = model.train_on_batch(x_i, y_i)  # update weights
-	    losses.append(loss)
-
-	    print("TRAINING LOSS: {}".format(np.mean(losses)))
+            loss = model.train_on_batch(X, Y)  # update weights
+            losses.append(loss)
+            print("TRAINING LOSS: {}".format(np.mean(losses)))
 
         # Re partition and shuffle
         epoch_data_loader.reset()
@@ -125,7 +150,7 @@ if args['mode'] == 'train':
 
     tensorboard.on_train_end(None)
 
-elif args['mode'] == 'test':
+"""elif args['mode'] == 'test':
 #  TODO
     for kitti_seq in test_seqs:
 
@@ -175,4 +200,4 @@ elif args['mode'] == 'test':
 
 else:
     print("ERROR: Mode {} not recognized".format(args['mode']))
-
+"""

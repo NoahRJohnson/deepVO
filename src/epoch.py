@@ -11,9 +11,8 @@ import math
 import numpy as np
 import os
 import random
+import operator
 
-from numpy.linalg import inv
-from odometry import odometry
 from os.path import join
 
 
@@ -50,8 +49,8 @@ def rotation_matrix_to_euler_angles(r):
     return np.array([x, y, z])
 
 
-def rectify_poses(poses):
-    """Set ground truth relative to first pose in subsequence.
+def rectify_poses(reference_pose, poses):
+    """Set ground truth relative to reference pose.
 
     Poses are rotation-translation matrices relative to the first
     pose in the full sequence. To get meaningful output from sub-
@@ -59,14 +58,23 @@ def rectify_poses(poses):
     first position in the sub-sequence.
 
     Args:
-        poses:  An iterable of 4x4 rotation-translation matrices representing
-                the vehicle's pose at each step in the sequence.
+        reference_pose: A 4x4 rotation-translation matrix representing
+                        the very first pose from which a subsequence
+                        starts. Note that this would be one before
+                        the first pose in a subsequence label, since
+                        the first time step in a subsequence has output
+                        pose equal to the ground truth at the second
+                        image frame.
+        poses:  An iterable of 4x4 rotation-translation matrices
+                representing the vehicle's pose at each time step
+                in the subsequence.
 
     Returns:
         An iterable of rectified rotation-translation matrices
     """
-    first_frame = poses[0]
-    rectified_poses = [np.dot(inv(first_frame), x) for x in poses[1:]]
+
+    rectified_poses = [np.dot(np.linalg.inv(reference_pose), x)
+                       for x in poses]
     return rectified_poses
 
 
@@ -125,13 +133,13 @@ def convert_flow_to_feature_vector(flow, crop_shape):
     """Crop the center, and flatten."""
     # Crop image from center based on minimum size
     # https://stackoverflow.com/a/50322574
-    start = tuple(map(lambda a, da: a // 2 - da // 2, flow.shape, crop_shape))
+    start = tuple(map(lambda a, da: int(a // 2) - int(da // 2), flow.shape, crop_shape))
     end = tuple(map(operator.add, start, crop_shape))
     slices = tuple(map(slice, start, end))
     crop = flow[slices]
 
     # Flatten image to 1-D feature vector
-    return crop.flatten()
+    return crop
 
 
 class Epoch():
@@ -191,7 +199,8 @@ class Epoch():
                 continue
 
             min_shape = np.minimum(min_shape, ex_img.shape)
-
+            min_shape = np.array([int(thing) for thing in min_shape])
+            print("################# min_shape: ", min_shape)
         return min_shape
 
     def get_num_features(self):
@@ -259,7 +268,6 @@ class Epoch():
                 # is handled in get_sample() for short final sub-sequence.
                 # End bounds are exclusive, to match range().
                 window_end = min(window_start + self.window_size, len_seq)
-
                 partitions.append((seq_no, window_start, window_end))
 
         # Shuffle the training data
@@ -285,34 +293,81 @@ class Epoch():
                      will require padding.
         Returns:
             A tuple (x, y):
-                x: A (window_size, HxWx3) array of flownet image pixels
+                x: A (window_size, H*W*2) array of flownet image pixels
                 y: A (window_size, 6) array of rectified ground truth poses
         """
+
         # Path to flow folder for this sequence
         flow_seq_path = join(self.flowdir, seq_no)
 
-        # The file names (w/o extension) to load
-        frame_nos = range(start_idx, end_idx)
+        # The flow indices to load. These are the
+        # same as the file names (w/o extension)
+        flow_indices = range(start_idx, end_idx)
 
         # Load raw optical flow images
         x = [read_flow(join(flow_seq_path,
                             "{}.flo".format(frame_no)))
-             for frame_no in frame_nos]
+             for frame_no in flow_indices]
 
         # Crop and flatten images into feature vectors
         x = [convert_flow_to_feature_vector(flow, self.min_flow_shape)
              for flow in x]
 
-        # Load poses
-        raw_poses = odometry(self.datadir, seq_no, frames=frame_nos).poses
-
-        # Convert to numpy arrays
+        # Convert to numpy array
         x = np.array(x)
-        y = process_poses(raw_poses)
 
-        # pad if necessary
-        if len(frame_nos) < self.window_size:
-            num_to_pad = self.window_size - len(frame_nos)
+        # The pose file containing ground truth poses for
+        # this sequence
+        pose_file_path = join(self.datadir,
+                              'poses',
+                              '{}.txt'.format(seq_no))
+
+        # The indices of the poses are shifted one ahead of
+        # the flows (flow image 0 was made from two frames,
+        # and the pose we want to estimate from that is the
+        # true pose at the timestamp of the second frame, at
+        # index 1)
+        pose_indices = set(range(start_idx + 1, end_idx + 1))
+
+        # Read and parse the ground truth poses
+        # This part comes from pykitti
+        # https://github.com/utiasSTARS/pykitti/blob/0e5fd7fefa7cd10bbdfb5bd131bb58481d481116/pykitti/odometry.py#L210
+        raw_poses = []
+        try:
+            with open(pose_file_path, 'r') as f:
+
+                # Read just the lines needed
+                for i, line in enumerate(f):
+                    if i == start_idx:
+                        reference_pose = np.fromstring(line,
+                                                       dtype=float,
+                                                       sep=' ')
+                        reference_pose = reference_pose.reshape(3, 4)
+                        reference_pose = np.vstack((reference_pose,
+                                                    [0, 0, 0, 1]))
+                    elif i in pose_indices:
+                        
+                        T_w_cam0 = np.fromstring(line, dtype=float, sep=' ')
+                        T_w_cam0 = T_w_cam0.reshape(3, 4)
+                        T_w_cam0 = np.vstack((T_w_cam0, [0, 0, 0, 1]))
+                        raw_poses.append(T_w_cam0)
+
+        except FileNotFoundError:
+            print('Ground truth poses are not available for sequence ' +
+                  seq_no + '.')
+
+        # Rectify poses so that they're relative to the first pose
+        # associated with the first image frame of the pair that made
+        # the first flow image in the subsequence.
+        # Also converts orientations to euler
+        # angles, and returns a numpy array
+        y = process_poses(reference_pose, raw_poses)
+
+        # pad both arrays if necessary
+        # (should only happen on final subsequence
+        # of sequence)
+        if len(pose_indices) < self.window_size:
+            num_to_pad = self.window_size - len(pose_indices)
             num_features = np.prod(x[0].shape)
 
             for i in range(num_to_pad):
@@ -321,6 +376,7 @@ class Epoch():
             for i in range(num_to_pad):
                 y = np.vstack(y, np.zeros(6))
 
+        # Return the data and labels for this sample
         return (x, y)
 
     def get_batch(self):
