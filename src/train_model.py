@@ -137,7 +137,7 @@ if args['mode'] == 'train':
             X, Y = epoch_data_loader.get_training_batch()
             loss = model.train_on_batch(X, Y)  # update weights
             losses.append(loss)
-            print("[Epoch {}] TRAINING LOSS: {}".format(epoch, loss)))
+            print("[Epoch {}] TRAINING LOSS: {}".format(epoch, loss))
 
         # Re partition and shuffle
         epoch_data_loader.reset()
@@ -160,54 +160,43 @@ if args['mode'] == 'train':
     # And tell tensorboard
     tensorboard.on_train_end(None)
 
-"""elif args['mode'] == 'test':
-#  TODO
+elif args['mode'] == 'test':
+
     for kitti_seq in test_seqs:
 
         # Open output file to write pose results to
         out_f = open('test_results/{}.csv'.format(kitti_seq))
 
-        test_data_loader = Epoch()
-
         losses = []
-        while not epoch_data_loader.is_complete():
-            X, Y = epoch_data_loader.get_batch()
+        for X, Y in epoch_data_loader.get_testing_samples(kitti_seq):
 
-            loss = model.train_on_batch(x_i, y_i)  # update weights
-            losses.append(loss)
+            # batch size of 1
+            X = X[np.newaxis, :]
 
-            print("TRAINING LOSS: {}".format(np.mean(losses)))
-
-        # Re partition and shuffle
-        epoch_data_loader.reset()
-
-        # Load subsequences to train on
-        X, Y = batcher.get_samples(basedir=args['data_dir'],
-                                           seq=kitti_seq,
-                                           batch_size=1)
-        for i in range(len(X)):  # looping over samples
-            y_i = np.array([Y[i]])
-
-            x_i = np.expand_dims(np.expand_dims(X[i], axis=1), axis=1)
-
-            estimated_pose = predict_on_batch(x_i)  # get pose
+            # get pose estimate
+            estimated_pose = model.predict_on_batch(X)
 
             # write out pose to file
-            out_f.write("{},{}".format(i, estimated_pose))
+            out_f.write("{}\n".format(estimated_pose))
 
-            model.test_on_batch(x_i, y_i)  # get testing loss
+            # Get testing loss
+            loss = model.test_on_batch(X, Y)
+            print("TESTING LOSS: {}".format(loss))
             losses.append(loss)
 
+        # Calculate average loss of this sequence
+        mean_seq_loss = np.mean(losses)
 
-        # Clean up I/O
+        print("Testing sequence {} finished. AVG TEST LOSS: {}".format(\
+                                                                kitti_seq,
+                                                                mean_seq_loss))
+
+        # save loss history with tensorboard at the end of each sequence
+        tensorboard.on_epoch_end(epoch, dict(testing_loss=mean_loss))
+
+        # Clean up I/O and go to the next sequence
         out_f.close()
-
-    # Calculate average loss of all samples in the testing data
-    mean_loss = np.mean(losses)
-
-    # save loss history with tensorboard at the end of each epoch
-    tensorboard.on_epoch_end(epoch, dict(testing_loss=mean_loss))
 
 else:
     print("ERROR: Mode {} not recognized".format(args['mode']))
-"""
+
