@@ -1,5 +1,4 @@
 import argparse
-import batcher 
 import keras as K
 import numpy as np
 import os
