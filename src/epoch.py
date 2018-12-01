@@ -307,7 +307,7 @@ class Epoch():
         # Load raw optical flow images
         x = [read_flow(join(flow_seq_path,
                             "{}.flo".format(frame_no)))
-             for frame_no in frame_nos]
+             for frame_no in flow_indices]
 
         # Crop and flatten images into feature vectors
         x = [convert_flow_to_feature_vector(flow, self.min_flow_shape)
@@ -366,8 +366,8 @@ class Epoch():
         # pad both arrays if necessary
         # (should only happen on final subsequence
         # of sequence)
-        if len(frame_nos) < self.window_size:
-            num_to_pad = self.window_size - len(frame_nos)
+        if len(pose_indices) < self.window_size:
+            num_to_pad = self.window_size - len(pose_indices)
             num_features = np.prod(x[0].shape)
 
             for i in range(num_to_pad):
