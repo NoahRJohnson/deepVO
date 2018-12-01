@@ -94,9 +94,9 @@ def mat_to_pose_vector(pose):
                           pose[:3, 3]))
 
 
-def process_poses(poses):
+def process_poses(reference_pose, poses):
     """Fully convert subsequence of poses."""
-    rectified_poses = rectify_poses(poses)
+    rectified_poses = rectify_poses(reference_pose, poses)
     return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
 
@@ -128,11 +128,27 @@ def read_flow(name):
 
     return flow
 
+def crop_flow(flow, crop_shape):
+    """Crop flow image from the center
+    https://stackoverflow.com/a/50322574
+    """
+
+    start = tuple(map(lambda a, da: int(a // 2) - int(da // 2),
+                  flow.shape, crop_shape))
+    end = tuple(map(operator.add,
+                start, crop_shape))
+    slices = tuple(map(slice,
+                   start, end))
+    crop = flow[slices]
+
+    return crop
+
 
 def convert_flow_to_feature_vector(flow, crop_shape):
     """Crop the center, and flatten."""
     # Crop image from center based on minimum size
     # https://stackoverflow.com/a/50322574
+
     start = tuple(map(lambda a, da: int(a // 2) - int(da // 2), flow.shape, crop_shape))
     end = tuple(map(operator.add, start, crop_shape))
     slices = tuple(map(slice, start, end))
@@ -150,7 +166,8 @@ class Epoch():
     """
 
     def __init__(self, datadir, flowdir, train_seq_nos,
-                 window_size, step_size, batch_size):
+                 test_seq_nos, window_size, step_size,
+                 batch_size):
         """Initialize.
 
         Args:
@@ -159,6 +176,8 @@ class Epoch():
             flowdir: The directory where the flownet images are
             train_seq_nos: list of strings corresponding to kitti
                            sequences in the training set
+            test_seq_nos: list of strings corresponding to kitti
+                           sequences in the testing set
             window_size: Number of flow images per window in sequence
                          partitioning, i.e. subsequence length.
             step_size: int. Step size for sliding window in sequence
@@ -175,37 +194,40 @@ class Epoch():
         self.datadir = datadir
         self.flowdir = flowdir
         self.train_seq_nos = train_seq_nos
+        self.test_seq_nos = test_seq_nos
         self.window_size = window_size
         self.step_size = step_size
         self.batch_size = batch_size
 
-        # Calculate subsequence indices
-        self.partitions = self.partition_sequences()
-
         # Compute minimum flow image size (they can differ)
         # We'll use these dimensions to crop all flow images
-        self.min_flow_shape = self.compute_min_flow_shape()
+        self.compute_min_flow_shape()
+
+        # Set up training partitions
+        self.reset()
 
     def compute_min_flow_shape(self):
         """Compute minimum dimension of .flo images across sequences."""
         min_shape = np.full((3,), fill_value=np.inf)
 
-        for seq_no in self.train_seq_nos:
-            ex_path = join(self.flowdir, seq_no, "0.flo")
+        for seq_nos in [self.train_seq_nos, self.test_seq_nos]:
+            for seq_no in seq_nos:
+                ex_path = join(self.flowdir, seq_no, "0.flo")
 
-            try:
-                ex_img = read_flow(ex_path)
-            except FileNotFoundError:
-                continue
+                try:
+                    ex_img = read_flow(ex_path)
+                except FileNotFoundError:
+                    continue
 
-            min_shape = np.minimum(min_shape, ex_img.shape)
-            min_shape = np.array([int(thing) for thing in min_shape])
-            print("################# min_shape: ", min_shape)
-        return min_shape
+                min_shape = np.minimum(min_shape, ex_img.shape)
+                min_shape = np.array([int(thing) for thing in min_shape])
+                print("################# min_shape: ", min_shape)
 
-    def get_num_features(self):
-        """Number of pixels in flow images."""
-        return np.prod(self.min_flow_shape)
+        self.min_flow_shape = min_shape
+
+    def get_input_shape(self):
+        """Shape of cropped flow images."""
+        return self.min_flow_shape
 
     def is_complete(self):
         """Check if epoch is complete.
@@ -213,20 +235,29 @@ class Epoch():
         The epoch is done if we can't completely fill up
         another batch.
         """
-        if len(self.partitions) < self.batch_size:
+        if len(self.training_partitions) < self.batch_size:
             return True
         else:
             return False
 
     def reset(self):
-        """Reset the Epoch instance.
+        """Reset the training partitions, effectively
+        resetting the Epoch instance.
 
         Call when an epoch is done, and you want to train
         over another epoch.
         """
-        self.partitions = self.partition_sequences()
 
-    def partition_sequences(self):
+        # Generate training partitions
+        self.training_partitions = self.partition_sequences(\
+                                       self.train_seq_nos,
+                                       self.window_size,
+                                       self.step_size)
+
+        # Shuffle the training data
+        random.shuffle(self.training_partitions)
+
+    def partition_sequences(self, seq_nos, window_size, step_size):
         """Partition training sequences into subsequences.
 
         No data is actually loaded yet, we just figure out
@@ -254,24 +285,22 @@ class Epoch():
         partitions = []
 
         # For every KITTI sequence
-        for seq_no in self.train_seq_nos:
+        for seq_no in seq_nos:
 
             # Get the length of that sequence
             len_seq = len(os.listdir(join(self.flowdir, seq_no)))
 
             # For every sliding window in that sequence
-            for window_start in range(0, len_seq - self.window_size + 1,
-                                      self.step_size):
+            for window_start in range(0, len_seq - window_size + 1,
+                                      step_size):
 
                 # Don't give window bounds with upper bound greater than
                 # the number of actual frames in the sequence. Padding
                 # is handled in get_sample() for short final sub-sequence.
                 # End bounds are exclusive, to match range().
-                window_end = min(window_start + self.window_size, len_seq)
+                window_end = min(window_start + window_size, len_seq)
                 partitions.append((seq_no, window_start, window_end))
 
-        # Shuffle the training data
-        random.shuffle(partitions)
 
         return partitions
 
@@ -293,7 +322,7 @@ class Epoch():
                      will require padding.
         Returns:
             A tuple (x, y):
-                x: A (window_size, H*W*2) array of flownet image pixels
+                x: A (window_size, H, W, 2) array of flownet image pixels
                 y: A (window_size, 6) array of rectified ground truth poses
         """
 
@@ -309,8 +338,8 @@ class Epoch():
                             "{}.flo".format(frame_no)))
              for frame_no in flow_indices]
 
-        # Crop and flatten images into feature vectors
-        x = [convert_flow_to_feature_vector(flow, self.min_flow_shape)
+        # Crop images to all have the same shape
+        x = [crop_flow(flow, self.min_flow_shape)
              for flow in x]
 
         # Convert to numpy array
@@ -368,10 +397,9 @@ class Epoch():
         # of sequence)
         if len(pose_indices) < self.window_size:
             num_to_pad = self.window_size - len(pose_indices)
-            num_features = np.prod(x[0].shape)
 
             for i in range(num_to_pad):
-                x = np.vstack(x, np.zeros(num_features))
+                x = np.vstack(x, np.zeros(self.min_flow_shape))
 
             for i in range(num_to_pad):
                 y = np.vstack(y, np.zeros(6))
@@ -379,13 +407,13 @@ class Epoch():
         # Return the data and labels for this sample
         return (x, y)
 
-    def get_batch(self):
+    def get_training_batch(self):
         """Get a batch.
 
         Returns:
             (x, y):
-                x: A (batch_size, window_size, HxWx3) np array of subsequences.
-                y: A (batch_size, window_size, HxWx3) np array of ground truth
+                x: A (batch_size, window_size, H,W,2) np array of subsequences.
+                y: A (batch_size, window_size, H,W,2) np array of ground truth
                    pose vectors.
 
         NOTE: See __init__ docstring note about batch_size.
@@ -398,7 +426,7 @@ class Epoch():
         for sample in range(self.batch_size):
 
             # get and remove first element
-            window_idx = self.partitions.pop()
+            window_idx = self.training_partitions.pop()
             seq_no, window_start_idx, window_end_idx = window_idx
 
             # Load the sample
@@ -415,3 +443,23 @@ class Epoch():
         y = np.array(y)
 
         return (x, y)
+
+    def get_testing_samples(self, seq_no):
+        """Might not be best OOP practice to have this here.
+        But it's simple. Generator which returns a whole
+        KITTI sequence broken up into subsequences, that
+        don't overlap.
+        """
+
+        testing_partitions = self.partition_sequences(\
+                                 [seq_no],
+                                 self.window_size,
+                                 self.window_size)  # no overlap
+
+        for _, start_idx, end_idx in testing_partitions:
+
+            # Load the sample
+            sample_x, sample_y = self.get_sample(seq_no,
+                                                 window_start_idx,
+                                                 window_end_idx)
+            yield (sample_x, sample_y)
