@@ -43,17 +43,16 @@ make
 
 ```
 
-Now we're ready to train our network. As before, use the makefile to build and run a Keras docker container:
+Now we're ready to train our network. As before, use the makefile to build and run a Keras docker container. Make sure you've exited the Caffe container first.
 
 ```bash
-make build-keras
 make keras
 ```
 
 From within the container, train the model using:
 
 ```bash
-python train_model.py
+python train_model.py data/dataset
 ```
 
 To visualize the loss function while training, use TensorBoard. Run the following in a separate terminal from the project root:
