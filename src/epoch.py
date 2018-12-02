@@ -143,6 +143,12 @@ def crop_flow(flow, crop_shape):
 
     return crop
 
+def normalize_flow(flow):
+    """Trying to get flows between [-1,1]"""
+    flow = flow / 255.0
+
+    return flow
+
 
 def convert_flow_to_feature_vector(flow, crop_shape):
     """Crop the center, and flatten."""
@@ -155,7 +161,7 @@ def convert_flow_to_feature_vector(flow, crop_shape):
     crop = flow[slices]
 
     # Flatten image to 1-D feature vector
-    return crop
+    return crop.flatten()
 
 
 class Epoch():
@@ -341,6 +347,9 @@ class Epoch():
         # Crop images to all have the same shape
         x = [crop_flow(flow, self.min_flow_shape)
              for flow in x]
+
+        # Normalize them to lie between -1 and 1
+        x = [normalize_flow(flow) for flow in x]
 
         # Convert to numpy array
         x = np.array(x)

@@ -15,14 +15,14 @@ from keras.layers.convolutional import Conv2D
 
 ap = argparse.ArgumentParser()
 
-ap.add_argument('--batch_size', type=int, default=5)
+ap.add_argument('--batch_size', type=int, default=1)
 ap.add_argument('--beta', type=int, default=100, help='Weight on orientation loss')
 ap.add_argument('--data_dir', type=str, default='data/dataset', help='Where KITTI data is stored')
 ap.add_argument('--hidden_dim', type=int, default=10, help='Dimension of LSTM hidden state')
 ap.add_argument('--layer_num', type=int, default=1, help='How many LSTM layers to stack')
 ap.add_argument('--num_epochs', type=int, default=5, help='How many full passes to make over the training data')
 ap.add_argument('--step_size', type=int, default=1, help='How many optical flow samples to skip between subsequences.')
-ap.add_argument('--subseq_length', type=int, default=5, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
+ap.add_argument('--subseq_length', type=int, default=20, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
 ap.add_argument('--mode', default = 'train', help="train or test. Train produces model checkpoints, test outputs csvs of poses for each testing sequence.")
 ap.add_argument('--snapshot_dir', default='snapshots/', help='what folder to store model snapshots in')
 
@@ -127,12 +127,6 @@ model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
 print("Model summary:")
 print(model.summary())
 
-# Create TensorBoard
-tensorboard = K.callbacks.TensorBoard(
-    log_dir="logs/{}".format(time()))
-
-# Attach it to our model
-tensorboard.set_model(model)
 
 # Set where weights and optimizer state are saved and loaded from
 snapshot_path = os.path.join(args['snapshot_dir'],
@@ -147,6 +141,13 @@ else:
     if args['mode'] == 'test':
         print("ERROR: Trying to test network but snapshot file {} not found.".format(snapshot_path))
         sys.exit()
+
+# Create TensorBoard
+tensorboard = K.callbacks.TensorBoard(
+    log_dir="logs/{}".format(time()))
+
+# Attach it to our model
+tensorboard.set_model(model)
 
 # Create signal handler to catch Ctrl-C
 # and save weights before shutdown
@@ -176,7 +177,7 @@ if args['mode'] == 'train':
             print("[Epoch {}] TRAINING LOSS: {}".format(epoch, loss))
 
             # save loss history for this batch
-            tensorboard.on_batch_end(batch_num, dict(batch_training_loss=loss))
+            tensorboard.on_epoch_end(batch_num, dict(batch_training_loss=loss))
             batch_num += 1
 
         # Re partition and shuffle samples
