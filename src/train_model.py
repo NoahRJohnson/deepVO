@@ -2,11 +2,12 @@ import argparse
 import keras as K
 import numpy as np
 import os
+import signal
+import sys
+
 from epoch import Epoch
-from time import time
-from keras.models import Sequential
 from keras.layers import Dense, Activation, MaxPooling2D, Dropout, LSTM, Flatten, merge, TimeDistributed
-import numpy as np
+from time import time
 
 from keras.layers import Concatenate
 
@@ -23,7 +24,7 @@ ap.add_argument('--num_epochs', type=int, default=5, help='How many full passes 
 ap.add_argument('--step_size', type=int, default=1, help='How many optical flow samples to skip between subsequences.')
 ap.add_argument('--subseq_length', type=int, default=5, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
 ap.add_argument('--mode', default = 'train', help="train or test. Train produces model checkpoints, test outputs csvs of poses for each testing sequence.")
-ap.add_argument('--weights_dir', default='weights/', help='what folder to store model weights in')
+ap.add_argument('--snapshot_dir', default='snapshots/', help='what folder to store model snapshots in')
 
 args = vars(ap.parse_args())
 
@@ -125,7 +126,6 @@ model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
 # #print-debugging lyfe
 print("Model summary:")
 print(model.summary())
-print("Layers: {}".format(model.layers))
 
 # Create TensorBoard
 tensorboard = K.callbacks.TensorBoard(
@@ -134,22 +134,52 @@ tensorboard = K.callbacks.TensorBoard(
 # Attach it to our model
 tensorboard.set_model(model)
 
-# Set where weights are saved and loaded from
-weights_path = os.path.join(args['weights_dir'],
-			    'weights.h5')
+# Set where weights and optimizer state are saved and loaded from
+snapshot_path = os.path.join(args['snapshot_dir'],
+			    'model.h5')
+
+# Load snapshot if it exists
+if os.path.isfile(snapshot_path):
+    print("Loading snapshot found at {}".format(snapshot_path))
+    model = K.models.load_model(snapshot_path, custom_objects={'weighted_mse': custom_loss_with_beta(beta=args['beta'])})
+else:
+    # We can't test the network if we haven't already trained it
+    if args['mode'] == 'test':
+        print("ERROR: Trying to test network but snapshot file {} not found.".format(snapshot_path))
+        sys.exit()
+
+# Create signal handler to catch Ctrl-C
+# and save weights before shutdown
+def signal_handler(sig, frame):
+        model.save(snapshot_path)
+        sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
 
 if args['mode'] == 'train':
     for epoch in range(args['num_epochs']):
 
         losses = []
 
+        batch_num = 0
         while not epoch_data_loader.is_complete():
+
+            # Get batch of random samples (subsequences)
             X, Y = epoch_data_loader.get_training_batch()
-            loss = model.train_on_batch(X, Y)  # update weights
+
+            # Update weights, and get training loss on this batch
+            loss = model.train_on_batch(X, Y)
+
+            # Store loss for epoch summary
             losses.append(loss)
+
+            # Some console lovin
             print("[Epoch {}] TRAINING LOSS: {}".format(epoch, loss))
 
-        # Re partition and shuffle
+            # save loss history for this batch
+            tensorboard.on_batch_end(batch_num, dict(batch_training_loss=loss))
+            batch_num += 1
+
+        # Re partition and shuffle samples
         epoch_data_loader.reset()
 
         # Calculate average loss of all samples this epoch
@@ -159,19 +189,16 @@ if args['mode'] == 'train':
                                                                 mean_epoch_loss))
 
         # save loss history with tensorboard at the end of each epoch
-        tensorboard.on_epoch_end(epoch, dict(training_loss=mean_epoch_loss))
+        tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_epoch_loss))
 
     # Once we're done with training, save the weights
-    print("TRAINING FINISHED. SAVING WEIGHTS TO {}".format(weights_path))
-    model.save_weights(weights_path)
+    print("TRAINING FINISHED. SAVING SNAPSHOT TO {}".format(snapshot_path))
+    model.save_weights(snapshot_path)
 
     # And tell tensorboard
     tensorboard.on_train_end(None)
 
 elif args['mode'] == 'test':
-
-    # Load model parameter weights from training
-    model.load_weights(weights_path)
 
     for kitti_seq in test_seqs:
 
