@@ -469,6 +469,6 @@ class Epoch():
 
             # Load the sample
             sample_x, sample_y = self.get_sample(seq_no,
-                                                 window_start_idx,
-                                                 window_end_idx)
+                                                 start_idx,
+                                                 end_idx)
             yield (sample_x, sample_y)
