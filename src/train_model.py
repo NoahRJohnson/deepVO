@@ -19,7 +19,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--batch_size', type=int, default=1)
 ap.add_argument('--beta', type=int, default=100, help='Weight on orientation loss')
 ap.add_argument('--data_dir', type=str, default='data/dataset', help='Where KITTI data is stored')
-ap.add_argument('--hidden_dim', type=int, default=1000, help='Dimension of LSTM hidden state')
+ap.add_argument('--hidden_dim', type=int, default=100, help='Dimension of LSTM hidden state')
 ap.add_argument('--layer_num', type=int, default=2, help='How many LSTM layers to stack')
 ap.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate for gradient descent optimization')
 ap.add_argument('--num_epochs', type=int, default=5, help='How many full passes to make over the training data')
@@ -48,12 +48,33 @@ def custom_loss_with_beta(beta):
             and beta is a hyperparameter
         """
 
-        ### NEWER LOSS ###
+        ### LOSS SO NEW IT WRAPS BACK AROUND TO BEING OLD ###
+        
+        squared_diff = K.backend.square(y_pred - y_true)
 
+        y_shape = K.backend.int_shape(squared_diff)
+        y_shape = (args['batch_size'],) + y_shape[1:]
+        #print("y_shape")
+        #print(y_shape)
+
+        weights = np.ones(y_shape)
+        weights[..., 0:3] = beta
+        weights = K.backend.variable(weights)
+
+        # element-wise multiplication
+        squared_diff_weighted = squared_diff * weights
+
+        loss = K.backend.mean(squared_diff_weighted, axis=-1)
+        
+
+        ### NEWER LOSS ###
+        """
         diff_abs = K.backend.abs(y_pred - y_true)
 
         y_shape = K.backend.int_shape(diff_abs)
         y_shape = (args['batch_size'],) + y_shape[1:]
+        print("y_shape")
+        print(y_shape)
 
         position_identity = np.zeros(y_shape)
         position_identity[..., 0:3] = 1
@@ -69,6 +90,8 @@ def custom_loss_with_beta(beta):
 
         orientation_diff_abs_other_way = K.backend.variable(np.full(y_shape, 2*np.pi)) - orientation_diff_abs
 
+        orientation_diff_abs_other_way = orientation_diff_abs_other_way * orientation_identity
+
         orientation_diff_magnitude = K.backend.minimum(orientation_diff_abs,
                                                        orientation_diff_abs_other_way)
 
@@ -78,10 +101,8 @@ def custom_loss_with_beta(beta):
         combined_diff = position_diff_abs + orientation_diff_magnitude
 
         loss = K.backend.mean(K.backend.square(combined_diff), axis=-1)
+        """
 
-
-
-        
         ###
         ## NEW LOSS WHICH HANDLES ANGLES
         ##
@@ -213,11 +234,11 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 if args['mode'] == 'train':
+    batch_num = 0
     for epoch in range(args['num_epochs']):
 
         losses = []
 
-        batch_num = 0
         while not epoch_data_loader.is_complete():
 
             # Get batch of random samples (subsequences)
@@ -249,7 +270,7 @@ if args['mode'] == 'train':
                                                                 mean_epoch_loss))
 
         # save loss history with tensorboard at the end of each epoch
-        tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_epoch_loss))
+        #tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_epoch_loss))
 
     # Once we're done with training, save the model
     print("TRAINING FINISHED. SAVING SNAPSHOT TO {}".format(snapshot_path))
@@ -266,19 +287,25 @@ elif args['mode'] == 'test':
         out_fname = "test_results/{}.csv".format(kitti_seq)
 
         losses = []
+        estimated_poses = []
         for X, Y in epoch_data_loader.get_testing_samples(kitti_seq):
 
             # batch size of 1
             X = X[np.newaxis, :]
 
-            # get pose estimate
-            estimated_pose = model.predict_on_batch(X)
+            #print("TESTING X SIZE = {}".format(X.shape))
 
-            # Put pose back in original reference frame
-            # and write out pose to file
-            subseq_preds_to_full_pred(estimated_pose, out_fname)
+            # get pose estimate
+            estimated_batch = model.predict_on_batch(X)
+
+            # TODO: Fix this to be more general for different batch sizes
+            estimated_pose = estimated_batch[0]
+
+            estimated_poses.append(estimated_pose)
+
 
             # Get testing loss
+            Y = Y[np.newaxis, :]  # batch size of 1
             loss = model.test_on_batch(X, Y)
             print("TESTING LOSS: {}".format(loss))
             losses.append(loss)
@@ -290,8 +317,12 @@ elif args['mode'] == 'test':
                                                                 kitti_seq,
                                                                 mean_seq_loss))
 
+        # Put poses back in original reference frame
+        # and write out to file
+        subseq_preds_to_full_pred(estimated_poses, out_fname)
+
         # save loss history with tensorboard at the end of each sequence
-        tensorboard.on_epoch_end(epoch, dict(testing_loss=mean_loss))
+        #tensorboard.on_epoch_end(epoch, dict(testing_loss=mean_loss))
 
 else:
     print("ERROR: Mode {} not recognized".format(args['mode']))
