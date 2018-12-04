@@ -90,9 +90,12 @@ def mat_to_pose_vector(pose):
 
         I.e. a (roll, pitch, yaw, lat, lng, alt) numpy array.
     """
-    return np.concatenate((rotation_matrix_to_euler_angles(pose[:3, :3]),
-                          pose[:3, 3]))
+    rotation_matrix = pose[:3, :3]
+    orientation = rotation_matrix_to_euler_angles(rotation_matrix)
 
+    position = pose[:3, 3]
+
+    return np.concatenate((position, orientation))
 
 def process_poses(reference_pose, poses):
     """Fully convert subsequence of poses."""
