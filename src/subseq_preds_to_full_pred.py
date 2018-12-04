@@ -38,8 +38,8 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
 
     with open(outfile_name, "w+") as oFile:
 
-        last_rotation = np.eye(3)
         last_position = np.zeros(3)
+        last_rotation = np.eye(3)
         for subseq in predictions:
             for pose in subseq:
 
@@ -57,8 +57,8 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
                 # Get rotation matrix in original reference frame
                 absolute_rotation = np.dot(last_rotation, relative_rotation)
 
-                # Put estimate in 3x4 transformation matrix, same
-                # as ground truth
+                # Put estimates in 3x4 transformation matrix, same
+                # format that ground truth uses
                 transformation_matrix = np.hstack((absolute_rotation, absolute_position.reshape((3,1))))
 
                 # Write out this matrix in row-major order as a line
