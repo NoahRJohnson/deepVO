@@ -15,6 +15,8 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
     # Calculates Rotation Matrix given euler angles.
     def euler_angles_to_rotation_matrix(theta):
         """Convert Euler angles to rotation matrix."""
+        print(theta)
+        print(math.cos([theta[0]]))
         r_x = np.array([[1, 0, 0],
                         [0, math.cos(theta[0]), -math.sin(theta[0])],
                         [0, math.sin(theta[0]), math.cos(theta[0])]
@@ -39,12 +41,13 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
         last_rot = np.eye(3)
         for batch in predictions:
             for pose in batch:
+                print(pose[:3])
                 current_rot = euler_angles_to_rotation_matrix(pose[:3])
                 absolute_rot = np.dot(last_rot, current_rot)
                 list_matrix = list(absolute_rot)
                 components = list_matrix[0] + [pose[3]] + \
                     list_matrix[1] + [pose[4]] + \
                     list_matrix[2] + [pose[5]]
-                oFile.write(",".join(components))
+                oFile.write(" ".join(components))
             last_rot = current_rot
 
