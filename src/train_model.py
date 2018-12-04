@@ -15,15 +15,15 @@ from keras.layers.convolutional import Conv2D
 
 ap = argparse.ArgumentParser()
 
-ap.add_argument('--batch_size', type=int, default=1)
+ap.add_argument('--batch_size', type=int, default=4)
 ap.add_argument('--beta', type=int, default=100, help='Weight on orientation loss')
 ap.add_argument('--data_dir', type=str, default='data/dataset', help='Where KITTI data is stored')
-ap.add_argument('--hidden_dim', type=int, default=10, help='Dimension of LSTM hidden state')
-ap.add_argument('--layer_num', type=int, default=1, help='How many LSTM layers to stack')
+ap.add_argument('--hidden_dim', type=int, default=1000, help='Dimension of LSTM hidden state')
+ap.add_argument('--layer_num', type=int, default=2, help='How many LSTM layers to stack')
 ap.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate for gradient descent optimization')
 ap.add_argument('--num_epochs', type=int, default=5, help='How many full passes to make over the training data')
-ap.add_argument('--step_size', type=int, default=1, help='How many optical flow samples to skip between subsequences.')
-ap.add_argument('--subseq_length', type=int, default=20, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
+ap.add_argument('--step_size', type=int, default=10, help='How many optical flow samples to skip between subsequences.')
+ap.add_argument('--subseq_length', type=int, default=50, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
 ap.add_argument('--mode', default = 'train', help="train or test. Train produces model checkpoints, test outputs csvs of poses for each testing sequence.")
 ap.add_argument('--snapshot_dir', default='snapshots/', help='what folder to store model snapshots in')
 
@@ -46,15 +46,66 @@ def custom_loss_with_beta(beta):
             L_q is the orientation loss,
             and beta is a hyperparameter
         """
-        #p_true = K.backend.gather(y_true, (0,1,2))
-        #p_pred = K.backend.gather(y_pred, (0,1,2))
-        #q_true = K.backend.gather(y_true, (3,4,5))
-        #q_pred = K.backend.gather(y_pred, (3,4,5))
-        #L_x = K.losses.mean_squared_error(p_true, p_pred)
-        #L_q = K.losses.mean_squared_error(q_true, q_pred)
-        #L_x = K.backend.mean(K.backend.square(p_pred - p_true), axis=-1)
-        #L_q = K.backend.mean(K.backend.square(q_pred - q_true), axis=-1)
 
+        ### NEWER LOSS ###
+
+        diff_abs = K.backend.abs(y_pred - y_true)
+
+        y_shape = K.backend.int_shape(diff_abs)
+        y_shape = (args['batch_size'],) + y_shape[1:]
+
+        position_identity = np.zeros(y_shape)
+        position_identity[..., 0:3] = 1
+        position_identity = K.backend.variable(position_identity)
+
+        position_diff_abs = diff_abs * position_identity
+
+        orientation_identity = np.zeros(y_shape)
+        orientation_identity[..., 4:7] = 1
+        orientation_identity = K.backend.variable(position_identity)
+
+        orientation_diff_abs = diff_abs * orientation_identity
+
+        orientation_diff_abs_other_way = K.backend.variable(np.full(y_shape, 2*np.pi)) - orientation_diff_abs
+
+        orientation_diff_magnitude = K.backend.minimum(orientation_diff_abs,
+                                                       orientation_diff_abs_other_way)
+
+        # Scale values by beta
+        orientation_diff_magnitude = orientation_diff_magnitude * np.sqrt(beta)
+
+        combined_diff = position_diff_abs + orientation_diff_magnitude
+
+        loss = K.backend.mean(K.backend.square(combined_diff), axis=-1)
+
+
+
+        
+        ###
+        ## NEW LOSS WHICH HANDLES ANGLES
+        ##
+        """
+        p_true = K.backend.gather(y_true, K.backend.variable(np.array([0,1,2]), dtype='int32'))
+        p_pred = K.backend.gather(y_pred, K.backend.variable(np.array([0,1,2]), dtype='int32'))
+        q_true = K.backend.gather(y_true, K.backend.variable(np.array([3,4,5]), dtype='int32'))
+        q_pred = K.backend.gather(y_pred, K.backend.variable(np.array([3,4,5]), dtype='int32'))
+
+        L_x = K.backend.mean(K.backend.square(p_pred - p_true), axis=-1)
+
+        q_diff_abs = K.backend.abs(q_pred - q_true)
+
+        q_diff_other_way = K.backend.variable(np.full(K.backend.int_shape(q_diff_abs), 2*np.pi)) - q_diff_abs
+
+        q_magnitude = K.backend.minimum(q_diff_abs, q_diff_other_way)
+
+        L_q = K.backend.mean(K.backend.square(q_magnitude), axis=-1)
+
+        loss = L_x + beta * L_q
+        """
+        ####
+        ###OLD LOSS
+        ####
+        """
         # Take the difference of each pose label and its estimate,
         # and square that element-wise
         squared_diff = K.backend.square(y_pred - y_true)
@@ -63,8 +114,7 @@ def custom_loss_with_beta(beta):
         # each tensor up
         weights = K.backend.variable(np.array([1,1,1,beta,beta,beta]))
         loss = K.backend.squeeze(K.backend.dot(squared_diff, K.backend.expand_dims(weights)), axis=-1)
-        #loss = K.backend.dot(squared_diff, weights)
-
+        """
         return loss
     return weighted_mse 
 
@@ -89,32 +139,37 @@ flow_input_shape = epoch_data_loader.get_input_shape()
 model = K.models.Sequential()
 
 # Reducing input dimensions via conv-pool layers
-model.add(TimeDistributed(Conv2D(10,(3,3)), input_shape=(args["subseq_length"], *flow_input_shape)))
+model.add(TimeDistributed(Conv2D(10,(3,3)),
+          input_shape=(args["subseq_length"], *flow_input_shape)))
 model.add(Activation('relu'))
-model.add(TimeDistributed(MaxPooling2D(data_format="channels_first", pool_size=(7, 7))))
+model.add(TimeDistributed(MaxPooling2D(data_format="channels_first",
+                                       pool_size=(7, 7))))
 
 model.add(TimeDistributed(Conv2D(10,(3,3))))
 model.add(Activation('relu'))
-model.add(TimeDistributed(MaxPooling2D(data_format="channels_first", pool_size=(5, 5))))
+model.add(TimeDistributed(MaxPooling2D(data_format="channels_first",
+                                       pool_size=(5, 5))))
 
 model.add(TimeDistributed(Conv2D(10,(3,3))))
 model.add(Activation('relu'))
-model.add(TimeDistributed(MaxPooling2D(data_format="channels_first", pool_size=(5, 5))))
+model.add(TimeDistributed(MaxPooling2D(data_format="channels_first",
+                                       pool_size=(5, 5))))
 
 model.add(TimeDistributed(Conv2D(10,(3,3))))
 model.add(Activation('relu'))
-model.add(TimeDistributed(MaxPooling2D(data_format="channels_first", pool_size=(3, 3))))
+model.add(TimeDistributed(MaxPooling2D(data_format="channels_first",
+                                       pool_size=(3, 3))))
 
-# Flatten outputs as input to LSTM
+# Flatten outputs for input to LSTM
 model.add(TimeDistributed(Flatten()))
 
 # Stacked LSTM layers
 for i in range(args['layer_num']):
-    model.add(LSTM(240, return_sequences=True))
+    model.add(LSTM(args['hidden_dim'], return_sequences=True))
 
 # A single dense layer to convert the LSTM output into
-# a pose estimate vector of length 6. We use a linear
-# activation because pose position values can be
+# a pose estimate vector of length 6. We use the default
+# linear activation because pose position values can be
 # unbounded.
 model.add(TimeDistributed(Dense(6)))
 
@@ -124,14 +179,13 @@ model.compile(loss=custom_loss_with_beta(beta=args['beta']),
               optimizer=K.optimizers.Adam(lr=args['learning_rate']))
 #model.compile(loss = "mse", optimizer = "adam")
 
-# #print-debugging lyfe
+# Describe layers and parameters
 print("Model summary:")
 print(model.summary())
 
-
 # Set where weights and optimizer state are saved and loaded from
 snapshot_path = os.path.join(args['snapshot_dir'],
-			    'model.h5')
+			                 'model.h5')
 
 # Load snapshot if it exists
 if os.path.isfile(snapshot_path):
@@ -151,7 +205,7 @@ tensorboard = K.callbacks.TensorBoard(
 tensorboard.set_model(model)
 
 # Create signal handler to catch Ctrl-C
-# and save weights before shutdown
+# and save model before shutdown
 def signal_handler(sig, frame):
         model.save(snapshot_path)
         sys.exit(0)
@@ -175,9 +229,12 @@ if args['mode'] == 'train':
             losses.append(loss)
 
             # Some console lovin
-            print("[Epoch {}] TRAINING LOSS: {}".format(epoch, loss))
+            print("[Epoch {} Batch {}] TRAINING LOSS: {}".format(epoch,
+                                                                 batch_num,
+                                                                 loss))
 
             # save loss history for this batch
+            # on_batch_end doesn't work!? using on_epoch_end temporarily
             tensorboard.on_epoch_end(batch_num, dict(batch_training_loss=loss))
             batch_num += 1
 
@@ -193,9 +250,9 @@ if args['mode'] == 'train':
         # save loss history with tensorboard at the end of each epoch
         tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_epoch_loss))
 
-    # Once we're done with training, save the weights
+    # Once we're done with training, save the model
     print("TRAINING FINISHED. SAVING SNAPSHOT TO {}".format(snapshot_path))
-    model.save_weights(snapshot_path)
+    model.save(snapshot_path)
 
     # And tell tensorboard
     tensorboard.on_train_end(None)
