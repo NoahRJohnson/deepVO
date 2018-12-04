@@ -35,8 +35,8 @@ ENV CAFFE_ROOT=/opt/caffe
 # Switch to that directory
 WORKDIR $CAFFE_ROOT
 
-# Copy build context into caffe root (should be flownet2 root)
-COPY . .
+# Download flownet2/ directory from github
+RUN git clone --depth 1 https://github.com/lmb-freiburg/flownet2.git .
 
 # Download required python libraries
 RUN python -m pip install --upgrade pip && \
