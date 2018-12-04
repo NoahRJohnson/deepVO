@@ -11,7 +11,7 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
     Returns: None
     """
     # Calculates Rotation Matrix given euler angles.
-    def euler_angles_to_rotation_matrix(theta, rot_order):
+    def euler_angles_to_rotation_matrix(theta):#,rot_order):
         """Convert Euler angles to rotation matrix."""
         print("Theta = {}".format(theta))
         print("Cos(Theta) = {}".format(math.cos(theta[0])))
@@ -30,7 +30,7 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
                         [0, 0, 1]
                         ])
         
-        x, y, z = rot_orders[rot_order]
+        #x, y, z = rot_orders[rot_order]
         r = np.dot(r_z, np.dot(r_y, r_x))
 
         return r

@@ -54,8 +54,8 @@ def custom_loss_with_beta(beta):
 
         y_shape = K.backend.int_shape(squared_diff)
         y_shape = (args['batch_size'],) + y_shape[1:]
-        print("y_shape")
-        print(y_shape)
+        #print("y_shape")
+        #print(y_shape)
 
         weights = np.ones(y_shape)
         weights[..., 0:3] = beta
@@ -287,19 +287,25 @@ elif args['mode'] == 'test':
         out_fname = "test_results/{}.csv".format(kitti_seq)
 
         losses = []
+        estimated_poses = []
         for X, Y in epoch_data_loader.get_testing_samples(kitti_seq):
 
             # batch size of 1
             X = X[np.newaxis, :]
 
-            # get pose estimate
-            estimated_pose = model.predict_on_batch(X)
+            #print("TESTING X SIZE = {}".format(X.shape))
 
-            # Put pose back in original reference frame
-            # and write out pose to file
-            subseq_preds_to_full_pred(estimated_pose, out_fname)
+            # get pose estimate
+            estimated_batch = model.predict_on_batch(X)
+
+            # TODO: Fix this to be more general for different batch sizes
+            estimated_pose = estimated_batch[0]
+
+            estimated_poses.append(estimated_pose)
+
 
             # Get testing loss
+            Y = Y[np.newaxis, :]  # batch size of 1
             loss = model.test_on_batch(X, Y)
             print("TESTING LOSS: {}".format(loss))
             losses.append(loss)
@@ -311,8 +317,12 @@ elif args['mode'] == 'test':
                                                                 kitti_seq,
                                                                 mean_seq_loss))
 
+        # Put poses back in original reference frame
+        # and write out to file
+        subseq_preds_to_full_pred(estimated_poses, out_fname)
+
         # save loss history with tensorboard at the end of each sequence
-        tensorboard.on_epoch_end(epoch, dict(testing_loss=mean_loss))
+        #tensorboard.on_epoch_end(epoch, dict(testing_loss=mean_loss))
 
 else:
     print("ERROR: Mode {} not recognized".format(args['mode']))
