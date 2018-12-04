@@ -249,7 +249,7 @@ if args['mode'] == 'train':
                                                                 mean_epoch_loss))
 
         # save loss history with tensorboard at the end of each epoch
-        tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_epoch_loss))
+        #tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_epoch_loss))
 
     # Once we're done with training, save the model
     print("TRAINING FINISHED. SAVING SNAPSHOT TO {}".format(snapshot_path))
