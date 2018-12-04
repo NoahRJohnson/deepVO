@@ -468,6 +468,8 @@ class Epoch():
                                  self.window_size,
                                  self.window_size)  # no overlap
 
+        testing_partitions.sort(key=lambda x: x[1])
+
         for _, start_idx, end_idx in testing_partitions:
 
             # Load the sample
@@ -475,3 +477,4 @@ class Epoch():
                                                  start_idx,
                                                  end_idx)
             yield (sample_x, sample_y)
+
