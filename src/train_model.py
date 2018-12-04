@@ -69,6 +69,8 @@ def custom_loss_with_beta(beta):
 
         orientation_diff_abs_other_way = K.backend.variable(np.full(y_shape, 2*np.pi)) - orientation_diff_abs
 
+        orientation_diff_abs_other_way = orientation_diff_abs_other_way * orientation_identity
+
         orientation_diff_magnitude = K.backend.minimum(orientation_diff_abs,
                                                        orientation_diff_abs_other_way)
 
@@ -80,8 +82,6 @@ def custom_loss_with_beta(beta):
         loss = K.backend.mean(K.backend.square(combined_diff), axis=-1)
 
 
-
-        
         ###
         ## NEW LOSS WHICH HANDLES ANGLES
         ##
