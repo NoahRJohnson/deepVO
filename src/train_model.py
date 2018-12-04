@@ -48,12 +48,33 @@ def custom_loss_with_beta(beta):
             and beta is a hyperparameter
         """
 
-        ### NEWER LOSS ###
+        ### LOSS SO NEW IT WRAPS BACK AROUND TO BEING OLD ###
+        
+        squared_diff = K.backend.square(y_pred - y_true)
 
+        y_shape = K.backend.int_shape(squared_diff)
+        y_shape = (args['batch_size'],) + y_shape[1:]
+        print("y_shape")
+        print(y_shape)
+
+        weights = np.ones(y_shape)
+        weights[..., 0:3] = beta
+        weights = K.backend.variable(weights)
+
+        # element-wise multiplication
+        squared_diff_weighted = squared_diff * weights
+
+        loss = K.backend.mean(squared_diff_weighted, axis=-1)
+        
+
+        ### NEWER LOSS ###
+        """
         diff_abs = K.backend.abs(y_pred - y_true)
 
         y_shape = K.backend.int_shape(diff_abs)
         y_shape = (args['batch_size'],) + y_shape[1:]
+        print("y_shape")
+        print(y_shape)
 
         position_identity = np.zeros(y_shape)
         position_identity[..., 0:3] = 1
@@ -80,7 +101,7 @@ def custom_loss_with_beta(beta):
         combined_diff = position_diff_abs + orientation_diff_magnitude
 
         loss = K.backend.mean(K.backend.square(combined_diff), axis=-1)
-
+        """
 
         ###
         ## NEW LOSS WHICH HANDLES ANGLES
@@ -213,11 +234,11 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 if args['mode'] == 'train':
+    batch_num = 0
     for epoch in range(args['num_epochs']):
 
         losses = []
 
-        batch_num = 0
         while not epoch_data_loader.is_complete():
 
             # Get batch of random samples (subsequences)
