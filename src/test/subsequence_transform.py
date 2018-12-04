@@ -32,4 +32,4 @@ epoch_data_loader = Epoch(datadir=datadir,
 
 pose_labels = np.array([y for x,y in epoch_data_loader.get_testing_samples('01')])
 
-subseq_preds_to_full_pred(pose_labels, '02_predictions.txt')
+subseq_preds_to_full_pred(pose_labels, '01_predictions.txt')
