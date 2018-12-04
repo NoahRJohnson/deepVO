@@ -52,7 +52,7 @@ make keras
 From within the container, train the model using:
 
 ```bash
-python train_model.py data/dataset
+python train_model.py
 ```
 
 To visualize the loss function while training, use TensorBoard. Run the following in a separate terminal from the project root:

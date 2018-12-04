@@ -13,7 +13,7 @@ from epoch import Epoch
 
 datadir = 'data/dataset'
 batch_size = 1
-subseq_length = 20
+subseq_length = 4
 step_size = 1
 
 # Separate the sequences for which there is ground truth into test 
@@ -37,16 +37,27 @@ print("Input shape: {}".format(flow_input_shape))
 # Test a batch
 X, Y = epoch_data_loader.get_training_batch()
 
-print("X.shape = {}".format(X.shape))
-print("Y.shape = {}".format(Y.shape))
+print("[Batch] X.shape = {}".format(X.shape))
+print("[Batch] Y.shape = {}".format(Y.shape))
 
 random_sample_index = np.random.randint(0, len(X))
 
-test_sample = X[random_sample_index]
-test_label = Y[random_sample_index]
+sample = X[random_sample_index]
+label = Y[random_sample_index]
 
-print("Example flow pixel values: {}".format(test_sample[0, 0:3, 0:3, 0]))
+print("[Sample] X.shape = {}".format(sample.shape))
+print("[Sample] Y.shape = {}".format(label.shape))
 
-print(np.min(test_sample))
-print(np.max(test_sample))
-print(np.mean(test_sample))
+print("Example flow pixel value: {}".format(sample[0, 0, 0, 0:]))
+
+print("Sample min: {}".format(np.min(sample)))
+print("Sample max: {}".format(np.max(sample)))
+print("Sample mean: {}".format(np.mean(sample)))
+
+f, axarr = plt.subplots(2,2)
+axarr[0,0].imshow(sample[0][:,:,0])
+axarr[0,1].imshow(sample[0][:,:,1])
+axarr[1,0].imshow(sample[1][:,:,0])
+axarr[1,1].imshow(sample[1][:,:,1])
+
+plt.savefig('sample.png')
