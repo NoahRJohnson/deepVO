@@ -7,6 +7,7 @@ import sys
 
 from epoch import Epoch
 from keras.layers import Dense, Activation, MaxPooling2D, Dropout, LSTM, Flatten, merge, TimeDistributed
+from subseq_preds_to_full_pred import subseq_preds_to_full_pred
 from time import time
 
 from keras.layers import Concatenate
@@ -15,7 +16,7 @@ from keras.layers.convolutional import Conv2D
 
 ap = argparse.ArgumentParser()
 
-ap.add_argument('--batch_size', type=int, default=4)
+ap.add_argument('--batch_size', type=int, default=1)
 ap.add_argument('--beta', type=int, default=100, help='Weight on orientation loss')
 ap.add_argument('--data_dir', type=str, default='data/dataset', help='Where KITTI data is stored')
 ap.add_argument('--hidden_dim', type=int, default=1000, help='Dimension of LSTM hidden state')
@@ -262,7 +263,7 @@ elif args['mode'] == 'test':
     for kitti_seq in test_seqs:
 
         # Open output file to write pose results to
-        out_f = open('test_results/{}.csv'.format(kitti_seq))
+        out_fname = "test_results/{}.csv".format(kitti_seq)
 
         losses = []
         for X, Y in epoch_data_loader.get_testing_samples(kitti_seq):
@@ -273,11 +274,9 @@ elif args['mode'] == 'test':
             # get pose estimate
             estimated_pose = model.predict_on_batch(X)
 
-            # TODO: Put pose back in original reference frame
-            
-
-            # write out pose to file
-            out_f.write("{}\n".format(estimated_pose))
+            # Put pose back in original reference frame
+            # and write out pose to file
+            subseq_preds_to_full_pred(estimated_pose, out_fname)
 
             # Get testing loss
             loss = model.test_on_batch(X, Y)
@@ -293,9 +292,6 @@ elif args['mode'] == 'test':
 
         # save loss history with tensorboard at the end of each sequence
         tensorboard.on_epoch_end(epoch, dict(testing_loss=mean_loss))
-
-        # Clean up I/O and go to the next sequence
-        out_f.close()
 
 else:
     print("ERROR: Mode {} not recognized".format(args['mode']))
