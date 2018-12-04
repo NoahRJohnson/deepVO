@@ -1,7 +1,6 @@
-"""Convert batch of predictions to one long prediction."""
-
 import math
 import numpy as np
+
 
 def subseq_preds_to_full_pred(predictions, outfile_name):
     """Convert a batch of subseq predictions to one long path.
@@ -12,7 +11,7 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
     Returns: None
     """
     # Calculates Rotation Matrix given euler angles.
-    def euler_angles_to_rotation_matrix(theta):
+    def euler_angles_to_rotation_matrix(theta, rot_order):
         """Convert Euler angles to rotation matrix."""
         print("Theta = {}".format(theta))
         print("Cos(Theta) = {}".format(math.cos(theta[0])))
@@ -30,10 +29,12 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
                         [math.sin(theta[2]), math.cos(theta[2]), 0],
                         [0, 0, 1]
                         ])
-
+        
+        x, y, z = rot_orders[rot_order]
         r = np.dot(r_z, np.dot(r_y, r_x))
 
         return r
+    
 
     with open(outfile_name, "w+") as oFile:
 
@@ -77,4 +78,3 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
             # subsequence left off
             last_rotation = absolute_rotation
             last_position = absolute_position
-
