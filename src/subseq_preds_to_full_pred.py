@@ -1,5 +1,3 @@
-"""Convert batch of predictions to one long prediction."""
-
 import math
 import numpy as np
 
@@ -13,7 +11,7 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
     Returns: None
     """
     # Calculates Rotation Matrix given euler angles.
-    def euler_angles_to_rotation_matrix(theta):
+    def euler_angles_to_rotation_matrix(theta, rot_order):
         """Convert Euler angles to rotation matrix."""
         r_x = np.array([[1, 0, 0],
                         [0, math.cos(theta[0]), -math.sin(theta[0])],
@@ -29,22 +27,28 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
                         [math.sin(theta[2]), math.cos(theta[2]), 0],
                         [0, 0, 1]
                         ])
-
+        
+        x, y, z = rot_orders[rot_order]
         r = np.dot(r_z, np.dot(r_y, r_x))
 
         return r
+    
 
     with open(outfile_name, "w+") as oFile:
 
         last_rot = np.eye(3)
+        last_pos = np.zeros(3)
         for batch in predictions:
             for pose in batch:
-                current_rot = euler_angles_to_rotation_matrix(pose[:3])
+                current_pos = last_pos + pose[:3]
+                current_rot = euler_angles_to_rotation_matrix(pose[3:], rot_order)
                 absolute_rot = np.dot(last_rot, current_rot)
-                list_matrix = list(absolute_rot)
-                components = list_matrix[0] + [pose[3]] + \
-                    list_matrix[1] + [pose[4]] + \
-                    list_matrix[2] + [pose[5]]
-                oFile.write(",".join(components))
+                list_matrix = [[str(component) for component in row] for row in absolute_rot]
+                
+               
+                components = list_matrix[0] + [str(current_pos[2])] + \
+                    list_matrix[1] + [str(current_pos[1])] + \
+                    list_matrix[2] + [str(current_pos[0])]
+                oFile.write(" ".join(components) + "\n")
             last_rot = current_rot
-
+            last_pos = current_pos
