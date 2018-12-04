@@ -3,7 +3,6 @@
 import math
 import numpy as np
 
-
 def subseq_preds_to_full_pred(predictions, outfile_name):
     """Convert a batch of subseq predictions to one long path.
 
@@ -16,7 +15,7 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
     def euler_angles_to_rotation_matrix(theta):
         """Convert Euler angles to rotation matrix."""
         print(theta)
-        print(math.cos([theta[0]]))
+        print(math.cos(theta[0]))
         r_x = np.array([[1, 0, 0],
                         [0, math.cos(theta[0]), -math.sin(theta[0])],
                         [0, math.sin(theta[0]), math.cos(theta[0])]
@@ -39,10 +38,15 @@ def subseq_preds_to_full_pred(predictions, outfile_name):
     with open(outfile_name, "w+") as oFile:
 
         last_rot = np.eye(3)
-        for batch in predictions:
-            for pose in batch:
-                print(pose[:3])
-                current_rot = euler_angles_to_rotation_matrix(pose[:3])
+        for subseq in predictions:
+            for pose in subseq:
+                position = pose[:3]
+                orientation = pose[3:]
+
+                print("Position = {}".format(position))
+                print("Orientation = {}".format(orientation))
+
+                current_rot = euler_angles_to_rotation_matrix(orientation)
                 absolute_rot = np.dot(last_rot, current_rot)
                 list_matrix = list(absolute_rot)
                 components = list_matrix[0] + [pose[3]] + \
