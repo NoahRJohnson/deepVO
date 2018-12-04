@@ -20,6 +20,7 @@ ap.add_argument('--beta', type=int, default=100, help='Weight on orientation los
 ap.add_argument('--data_dir', type=str, default='data/dataset', help='Where KITTI data is stored')
 ap.add_argument('--hidden_dim', type=int, default=10, help='Dimension of LSTM hidden state')
 ap.add_argument('--layer_num', type=int, default=1, help='How many LSTM layers to stack')
+ap.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate for gradient descent optimization')
 ap.add_argument('--num_epochs', type=int, default=5, help='How many full passes to make over the training data')
 ap.add_argument('--step_size', type=int, default=1, help='How many optical flow samples to skip between subsequences.')
 ap.add_argument('--subseq_length', type=int, default=20, help='How many optical flow images to include in one subsequence during training. Affects memory consumption.')
@@ -58,10 +59,9 @@ def custom_loss_with_beta(beta):
         # and square that element-wise
         squared_diff = K.backend.square(y_pred - y_true)
 
-        # Multiply the orientations by beta squared, and sum
+        # Multiply the orientations by beta, and sum
         # each tensor up
-        beta_sq = beta*beta
-        weights = K.backend.variable(np.array([1,1,1,beta_sq,beta_sq,beta_sq]))
+        weights = K.backend.variable(np.array([1,1,1,beta,beta,beta]))
         loss = K.backend.squeeze(K.backend.dot(squared_diff, K.backend.expand_dims(weights)), axis=-1)
         #loss = K.backend.dot(squared_diff, weights)
 
@@ -120,7 +120,8 @@ model.add(TimeDistributed(Dense(6)))
 
 
 # Compile the model, with custom loss function
-model.compile(loss=custom_loss_with_beta(beta=args['beta']), optimizer='adam')
+model.compile(loss=custom_loss_with_beta(beta=args['beta']),
+              optimizer=K.optimizers.Adam(lr=args['learning_rate']))
 #model.compile(loss = "mse", optimizer = "adam")
 
 # #print-debugging lyfe
@@ -214,6 +215,9 @@ elif args['mode'] == 'test':
 
             # get pose estimate
             estimated_pose = model.predict_on_batch(X)
+
+            # TODO: Put pose back in original reference frame
+            
 
             # write out pose to file
             out_f.write("{}\n".format(estimated_pose))
