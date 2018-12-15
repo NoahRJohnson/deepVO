@@ -61,3 +61,9 @@ axarr[1,0].imshow(sample[1][:,:,0])
 axarr[1,1].imshow(sample[1][:,:,1])
 
 plt.savefig('sample.png')
+
+# Split an entire test sequence
+test_x, test_y = epoch_data_loader.get_testing_samples('01')
+
+print(len(test_y))
+print(test_y[:10])

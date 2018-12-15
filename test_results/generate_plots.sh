@@ -11,9 +11,9 @@ if [ ! -d "$POSES_DIR" ]; then
 fi
 
 
-for fullfile in $(find . -type f -printf '"%f","%h"\n' | paste -d, -s -); do
+for fullfile in *.csv; do
   filename=$(basename -- "$fullfile")
   filename="${filename%.*}"
   echo Processing "$filename"
-  #evo_traj kitti "$fullfile" "$POSES_DIR"/"$filename".txt --save_plot "$filename".pdf
+  evo_traj kitti "$fullfile" "$POSES_DIR"/"$filename".txt --save_plot "$filename".pdf
 done

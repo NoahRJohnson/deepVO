@@ -83,12 +83,12 @@ def mat_to_pose_vector(pose):
 
     Args:
         pose:  The 4x4 rotation-translation matrix representing the vehicle's
-        pose.
+               pose.
 
     Returns:
         The pose represented as a vector.
 
-        I.e. a (roll, pitch, yaw, lat, lng, alt) numpy array.
+        I.e. a (x, y, z, roll, pitch, yaw) numpy array.
     """
     rotation_matrix = pose[:3, :3]
     orientation = rotation_matrix_to_euler_angles(rotation_matrix)
@@ -97,9 +97,9 @@ def mat_to_pose_vector(pose):
 
     return np.concatenate((position, orientation))
 
-def process_poses(reference_pose, poses):
+def process_poses(reference_pose, raw_poses):
     """Fully convert subsequence of poses."""
-    rectified_poses = rectify_poses(reference_pose, poses)
+    rectified_poses = rectify_poses(reference_pose, raw_poses)
     return np.array([mat_to_pose_vector(pose) for pose in rectified_poses])
 
 

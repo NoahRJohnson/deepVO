@@ -65,20 +65,19 @@ and open localhost:6006 in a browser. If you're on a server you'll have to forwa
 
 Model weights are saved in 'checkpoints'.
 
-To validate and test the trained model
+To test the trained model.
 
 ```bash
-
+python src/train_model.py --mode test
 ```
 
-view test results in ROS Gazebo
+which will output csvs to "test_results". To view the results graphically, install [evo](https://github.com/MichaelGrupp/evo). The evo package has been installed for your convenience in the keras docker image.
+
+
+Once you have evo installed, run
 
 ```bash
-
+test_results/generate_plots.sh
 ```
 
-generate result statistics
-
-```bash
-
-```
+to generate pdfs of the results.
