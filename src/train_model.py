@@ -240,7 +240,13 @@ if args['mode'] == 'train':
 
         # Test loss
         testing_losses = []
-        while not epoch_data_loader.testing_is_complete():
+        #while not epoch_data_loader.testing_is_complete():
+        for i in range(30):
+
+            # temp solution because testing loss calculation
+            # is taking too long
+            if epoch_data_loader.testing_is_complete():
+                continue
 
             # Get batch of random samples (subsequences)
             # from held-out KITTI sequences
@@ -261,7 +267,8 @@ if args['mode'] == 'train':
 
         # Write test loss to tensorboard
         tensorboard.on_batch_end(batch_num,
-                                 dict(validation_loss=mean_test_loss))
+                                 dict(validation_loss=mean_test_loss,
+                                      size=1))
 
         # Train loss
         training_losses = []
@@ -283,7 +290,8 @@ if args['mode'] == 'train':
 
             # save loss history for this batch
             # on_batch_end doesn't work!? using on_epoch_end temporarily
-            tensorboard.on_batch_end(batch_num, dict(training_loss=loss))
+            tensorboard.on_batch_end(batch_num, dict(training_loss=loss,
+                                                     size=1))
             batch_num += 1
 
 
