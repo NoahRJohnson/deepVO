@@ -212,7 +212,7 @@ class Epoch():
         # We'll use these dimensions to crop all flow images
         self.compute_min_flow_shape()
 
-        # Set up training partitions
+        # Set up training and testing partitions
         self.reset()
 
     def compute_min_flow_shape(self):
@@ -238,8 +238,8 @@ class Epoch():
         """Shape of cropped flow images."""
         return self.min_flow_shape
 
-    def is_complete(self):
-        """Check if epoch is complete.
+    def training_is_complete(self):
+        """Check if training epoch is complete.
 
         The epoch is done if we can't completely fill up
         another batch.
@@ -249,9 +249,20 @@ class Epoch():
         else:
             return False
 
+    def testing_is_complete(self):
+        """Check if testing epoch is complete.
+
+        The epoch is done if we can't completely fill up
+        another batch.
+        """
+        if len(self.testing_partitions) < self.batch_size:
+            return True
+        else:
+            return False
+
     def reset(self):
-        """Reset the training partitions, effectively
-        resetting the Epoch instance.
+        """Reset the training and testing partitions,
+        effectively resetting the Epoch instance.
 
         Call when an epoch is done, and you want to train
         over another epoch.
@@ -265,6 +276,13 @@ class Epoch():
 
         # Shuffle the training data
         random.shuffle(self.training_partitions)
+
+        # Generate testing partitions
+        self.testing_partitions = self.partition_sequences(\
+                                       self.test_seq_nos,
+                                       self.window_size,
+                                       self.step_size)
+        
 
     def partition_sequences(self, seq_nos, window_size, step_size):
         """Partition training sequences into subsequences.
@@ -423,18 +441,18 @@ class Epoch():
         """Get a batch.
 
         Returns:
-            (x, y):
-                x: A (batch_size, window_size, H,W,2) np array of subsequences.
-                y: A (batch_size, window_size, H,W,2) np array of ground truth
+            (X, Y):
+                X: A (batch_size, window_size, H,W,2) np array of subsequences.
+                Y: A (batch_size, window_size, H,W,2) np array of ground truth
                    pose vectors.
 
         NOTE: See __init__ docstring note about batch_size.
         """
-        if self.is_complete():
+        if self.training_is_complete():
             return None
 
-        x = []
-        y = []
+        X = []
+        Y = []
         for sample in range(self.batch_size):
 
             # get and remove first element
@@ -447,14 +465,52 @@ class Epoch():
                                                  window_end_idx)
 
             # Add sample data and truth pose to batch
-            x.append(sample_x)
-            y.append(sample_y)
+            X.append(sample_x)
+            Y.append(sample_y)
 
         # Convert to numpy arrays
-        x = np.array(x)
-        y = np.array(y)
+        X = np.array(X)
+        Y = np.array(Y)
 
-        return (x, y)
+        # Return batch
+        return (X, Y)
+
+    def get_testing_batch(self):
+        """Get a batch.
+
+        Returns:
+            (X, Y):
+                X: A (batch_size, window_size, H,W,2) np array of subsequences.
+                yY: A (batch_size, window_size, H,W,2) np array of ground truth
+                   pose vectors.
+
+        NOTE: See __init__ docstring note about batch_size.
+        """
+        if self.testing_is_complete():
+            return None
+
+        X = []
+        Y = []
+        for sample in range(self.batch_size):
+
+            # get and remove first element
+            seq_no, window_start_idx, window_end_idx = self.testing_partitions.pop()
+
+            # Load the sample
+            sample_x, sample_y = self.get_sample(seq_no,
+                                                 window_start_idx,
+                                                 window_end_idx)
+
+            # Add sample data and truth pose to batch
+            X.append(sample_x)
+            Y.append(sample_y)
+
+        # Convert to numpy arrays
+        X = np.array(X)
+        Y = np.array(Y)
+
+        # Return batch
+        return (X, Y)
 
     def get_testing_samples(self, seq_no):
         """Might not be best OOP practice to have this here.

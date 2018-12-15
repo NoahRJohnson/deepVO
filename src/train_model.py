@@ -221,7 +221,8 @@ else:
 
 # Create TensorBoard
 tensorboard = K.callbacks.TensorBoard(
-    log_dir="logs/{}".format(time()))
+    log_dir="logs/{}".format(time()),
+    update_freq='batch')
 
 # Attach it to our model
 tensorboard.set_model(model)
@@ -237,9 +238,34 @@ if args['mode'] == 'train':
     batch_num = 0
     for epoch in range(args['num_epochs']):
 
-        losses = []
+        # Test loss
+        testing_losses = []
+        while not epoch_data_loader.testing_is_complete():
 
-        while not epoch_data_loader.is_complete():
+            # Get batch of random samples (subsequences)
+            # from held-out KITTI sequences
+            X, Y = epoch_data_loader.get_testing_batch()
+
+            # Get testing loss on this batch
+            loss = model.test_on_batch(X, Y)
+
+            # Store loss for mean
+            testing_losses.append(loss)
+
+        # Calculate average loss across test set
+        mean_test_loss = np.mean(testing_losses)
+
+        # Some console lovin
+        print("[Epoch {}] TESTING LOSS: {}".format(epoch,
+                                                   mean_test_loss))
+
+        # Write test loss to tensorboard
+        tensorboard.on_batch_end(batch_num,
+                                 dict(validation_loss=mean_test_loss))
+
+        # Train loss
+        training_losses = []
+        while not epoch_data_loader.training_is_complete():
 
             # Get batch of random samples (subsequences)
             X, Y = epoch_data_loader.get_training_batch()
@@ -247,8 +273,8 @@ if args['mode'] == 'train':
             # Update weights, and get training loss on this batch
             loss = model.train_on_batch(X, Y)
 
-            # Store loss for epoch summary
-            losses.append(loss)
+            # Store loss
+            training_losses.append(loss)
 
             # Some console lovin
             print("[Epoch {} Batch {}] TRAINING LOSS: {}".format(epoch,
@@ -257,20 +283,22 @@ if args['mode'] == 'train':
 
             # save loss history for this batch
             # on_batch_end doesn't work!? using on_epoch_end temporarily
-            tensorboard.on_epoch_end(batch_num, dict(batch_training_loss=loss))
+            tensorboard.on_batch_end(batch_num, dict(training_loss=loss))
             batch_num += 1
+
+
+        # Calculate average loss of all samples this epoch
+        mean_train_loss = np.mean(training_losses)
+
+        print("Epoch {} finished. AVG TRAINING LOSS: {}".format(epoch,
+                                                                mean_train_loss))
+
+        # save loss history with tensorboard at the end of each epoch
+        #tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_train_loss))
 
         # Re partition and shuffle samples
         epoch_data_loader.reset()
 
-        # Calculate average loss of all samples this epoch
-        mean_epoch_loss = np.mean(losses)
-
-        print("Epoch {} finished. AVG TRAINING LOSS: {}".format(epoch,
-                                                                mean_epoch_loss))
-
-        # save loss history with tensorboard at the end of each epoch
-        #tensorboard.on_epoch_end(epoch, dict(epoch_training_loss=mean_epoch_loss))
 
     # Once we're done with training, save the model
     print("TRAINING FINISHED. SAVING SNAPSHOT TO {}".format(snapshot_path))
