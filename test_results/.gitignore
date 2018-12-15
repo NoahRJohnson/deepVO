@@ -1,0 +1,6 @@
+# ignore everything
+*
+# except for:
+!.gitignore
+!generate_plots.sh
+!sanity_check

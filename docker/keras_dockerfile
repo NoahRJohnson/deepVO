@@ -40,6 +40,7 @@ RUN conda install -y python=${python_version} && \
       sklearn_pandas \
       tensorflow-gpu \
       cntk-gpu && \
+    pip install evo --upgrade && \
     conda install \
       bcolz \
       cython \
