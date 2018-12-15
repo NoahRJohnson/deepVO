@@ -61,18 +61,23 @@ To visualize the loss function while training, use TensorBoard. Run the followin
 ./start_tensorboard.sh
 ```
 
-and open localhost:6006 in a browser. If you're on a server you'll have to forward the port.
+If you're on a server you'll have to forward the port, e.g. with
 
-Model weights are saved in 'checkpoints'.
+```bash
+ssh -N -L 6006:localhost:6006 you@server
+```
 
-To test the trained model.
+Now you should be able to track training by opening localhost:6006 in a browser.
+
+Model weights are saved in 'snapshots'. The default weights file is written to "snapshots/model.h5". Move this if you restart training and want to start from scratch.
+
+To test the trained model, use the test mode:
 
 ```bash
 python src/train_model.py --mode test
 ```
 
 which will output csvs to "test_results". To view the results graphically, install [evo](https://github.com/MichaelGrupp/evo). The evo package has been installed for your convenience in the keras docker image.
-
 
 Once you have evo installed, run
 
