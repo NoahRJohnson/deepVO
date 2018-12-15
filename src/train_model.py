@@ -58,7 +58,7 @@ def custom_loss_with_beta(beta):
         #print(y_shape)
 
         weights = np.ones(y_shape)
-        weights[..., 0:3] = beta
+        weights[..., 3:] = beta
         weights = K.backend.variable(weights)
 
         # element-wise multiplication
@@ -307,7 +307,7 @@ elif args['mode'] == 'test':
             # Get testing loss
             Y = Y[np.newaxis, :]  # batch size of 1
             loss = model.test_on_batch(X, Y)
-            print("TESTING LOSS: {}".format(loss))
+            #print("TESTING LOSS: {}".format(loss))
             losses.append(loss)
 
         # Calculate average loss of this sequence
